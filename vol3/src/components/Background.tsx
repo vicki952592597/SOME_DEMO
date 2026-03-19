@@ -30,15 +30,23 @@ export default function Background() {
       }
       void main() {
         vec2 uv = vUv;
-        vec3 top = vec3(0.018, 0.018, 0.058);
-        vec3 mid = vec3(0.048, 0.042, 0.185);
-        vec3 bot = vec3(0.148, 0.118, 0.365);
+        // 参考图渐变：上方几乎黑，中间深蓝，底部暖蓝紫
+        vec3 top = vec3(0.012, 0.012, 0.050);    // 近黑
+        vec3 mid = vec3(0.042, 0.038, 0.175);    // 深靛蓝
+        vec3 bot = vec3(0.165, 0.132, 0.400);    // 蓝紫（更暖更亮）
         float t = uv.y;
-        vec3 col = t > 0.5
-          ? mix(mid, top, smoothstep(0.5, 1.0, t))
-          : mix(bot, mid, smoothstep(0.0, 0.5, t));
-        float cd = length(vec2(uv.x - 0.5, (uv.y - 0.5) * 1.4));
-        col += vec3(0.05, 0.04, 0.12) * exp(-cd * cd * 5.0);
+        vec3 col;
+        if (t > 0.6) {
+          col = mix(mid, top, smoothstep(0.6, 1.0, t));
+        } else if (t > 0.25) {
+          col = mix(bot, mid, smoothstep(0.25, 0.6, t));
+        } else {
+          // 底部最亮区域
+          col = mix(bot * 1.08, bot, smoothstep(0.0, 0.25, t));
+        }
+        // 花朵区域微弱辉光
+        float cd = length(vec2(uv.x - 0.5, (uv.y - 0.48) * 1.3));
+        col += vec3(0.04, 0.03, 0.10) * exp(-cd * cd * 4.0);
         vec2 sg = uv * vec2(85.0, 48.0);
         vec2 sc = floor(sg);
         float sr = hash(sc);

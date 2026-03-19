@@ -24,8 +24,8 @@ export default function Stem() {
   }), []);
 
   return (
-    <mesh position={[0, -0.95, 0]} material={mat}>
-      <cylinderGeometry args={[0.012, 0.025, 0.9, 8, 6]} />
+    <mesh position={[0, -0.52, 0]} material={mat}>
+      <cylinderGeometry args={[0.014, 0.028, 0.8, 8, 6]} />
     </mesh>
   );
 }
