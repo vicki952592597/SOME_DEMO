@@ -8,13 +8,11 @@ import * as THREE from 'three';
 import Dahlia from './Dahlia';
 import Stem from './Stem';
 import Background from './Background';
+import { useStore } from '@/store';
 
 function SceneContent() {
   const groupRef = useRef<THREE.Group>(null!);
-
-  // 鼠标原始位置（归一化 -1 ~ 1）
   const mouse = useRef({ x: 0, y: 0 });
-  // 平滑插值后的位置
   const smooth = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -27,33 +25,20 @@ function SceneContent() {
   }, []);
 
   useFrame(({ camera, clock }) => {
+    const s = useStore.getState();
     const t = clock.getElapsedTime();
+    smooth.current.x += (mouse.current.x - smooth.current.x) * s.smoothFactor;
+    smooth.current.y += (mouse.current.y - smooth.current.y) * s.smoothFactor;
 
-    // 平滑跟随
-    smooth.current.x += (mouse.current.x - smooth.current.x) * 0.04;
-    smooth.current.y += (mouse.current.y - smooth.current.y) * 0.04;
-
-    const dist = 2.2;
-    const basePitch = 0.18;
-    const baseAngle = t * 0.015;
-
-    // 鼠标驱动视角偏移（3D感关键）
-    const hOffset = smooth.current.x * 0.45;
-    const vOffset = smooth.current.y * 0.2;
-
-    const angle = baseAngle + hOffset;
-    const pitch = basePitch + vOffset;
+    const angle = t * s.autoRotateSpeed + smooth.current.x * s.mouseParallaxH;
+    const pitch = 0.18 + smooth.current.y * s.mouseParallaxV;
 
     camera.position.set(
-      Math.sin(angle) * dist * Math.cos(pitch),
-      Math.sin(pitch) * dist + 0.08,
-      Math.cos(angle) * dist * Math.cos(pitch)
+      Math.sin(angle) * s.cameraDistance * Math.cos(pitch),
+      Math.sin(pitch) * s.cameraDistance + 0.08,
+      Math.cos(angle) * s.cameraDistance * Math.cos(pitch)
     );
-
-    // lookAt 也微微偏移增加视差
-    const lookX = smooth.current.x * -0.05;
-    const lookY = smooth.current.y * 0.03;
-    camera.lookAt(lookX, lookY, 0);
+    camera.lookAt(smooth.current.x * -0.05, smooth.current.y * 0.03, 0);
   });
 
   return (
@@ -66,5 +51,4 @@ function SceneContent() {
     </>
   );
 }
-
 export default SceneContent;

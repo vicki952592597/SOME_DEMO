@@ -7,6 +7,7 @@
  */
 import dynamic from 'next/dynamic';
 import { Canvas } from '@react-three/fiber';
+import ControlPanel from '@/components/ControlPanel';
 
 // 动态导入 Scene 组件，禁用 SSR（Three.js 需要 DOM）
 const SceneContent = dynamic(() => import('@/components/Scene'), { ssr: false });
@@ -17,16 +18,12 @@ export default function Home() {
       <Canvas
         camera={{ fov: 45, near: 0.1, far: 100, position: [0, 1, 3] }}
         dpr={[1, 2]}
-        gl={{
-          antialias: true,
-          alpha: false,
-          powerPreference: 'high-performance',
-          toneMapping: 0, // NoToneMapping
-        }}
+        gl={{ antialias: true, alpha: false, powerPreference: 'high-performance', toneMapping: 0 }}
         style={{ width: '100%', height: '100%' }}
       >
         <SceneContent />
       </Canvas>
+      <ControlPanel />
     </div>
   );
 }

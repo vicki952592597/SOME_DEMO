@@ -4,8 +4,12 @@
  */
 import * as THREE from 'three';
 import { useMemo } from 'react';
+import { useStore } from '@/store';
 
 export default function Stem() {
+  const stemY = useStore((s) => s.stemY);
+  const stemLength = useStore((s) => s.stemLength);
+
   const mat = useMemo(() => new THREE.ShaderMaterial({
     vertexShader: `
       varying vec3 vN;
@@ -24,8 +28,8 @@ export default function Stem() {
   }), []);
 
   return (
-    <mesh position={[0, -0.28, 0]} material={mat}>
-      <cylinderGeometry args={[0.014, 0.026, 0.55, 8, 6]} />
+    <mesh position={[0, stemY, 0]} material={mat}>
+      <cylinderGeometry args={[0.014, 0.026, stemLength, 8, 6]} />
     </mesh>
   );
 }

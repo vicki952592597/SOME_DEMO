@@ -6,6 +6,7 @@
 import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { useStore } from '@/store';
 
 /* ===== 层级配置：每层一圈花瓣 ===== */
 const LAYERS = [
@@ -189,19 +190,32 @@ export default function Dahlia() {
   const geo = useMemo(() => mkGeo(), []);
   const mat = useMemo(() => new THREE.ShaderMaterial({
     vertexShader: VS, fragmentShader: FS,
-    uniforms: { uTime: { value: 0 } },
+    uniforms: {
+      uTime: { value: 0 },
+      uBreathAmp: { value: 0.004 },
+      uEnergySpeed: { value: 0.4 },
+      uEnergyStr: { value: 0.22 },
+      uFresnelStr: { value: 0.38 },
+      uCoreGlow: { value: 0.55 },
+    },
     transparent: true, side: THREE.DoubleSide,
     depthWrite: false, depthTest: true,
   }), []);
 
   /* ===== 每帧动画：循环生长 ===== */
   useFrame((_, dt) => {
+    const s = useStore.getState();
     mat.uniforms.uTime.value += dt;
+    mat.uniforms.uBreathAmp.value = s.breatheAmp;
+    mat.uniforms.uEnergySpeed.value = s.energyWaveSpeed;
+    mat.uniforms.uEnergyStr.value = s.energyWaveStrength;
+    mat.uniforms.uFresnelStr.value = s.fresnelStrength;
+    mat.uniforms.uCoreGlow.value = s.coreGlow;
     const t = mat.uniforms.uTime.value;
     const mesh = meshRef.current;
     if (!mesh) return;
 
-    const cycle = 5.0;
+    const cycle = s.cycleDuration;
     const phase = (t % cycle) / cycle;
     let idx = 0;
 
