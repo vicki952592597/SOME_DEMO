@@ -12,10 +12,9 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
 // ===== 花瓣配置 =====
-const PETAL_COUNT = 380;            // 花瓣总数
+const PETAL_COUNT = 420;            // 花瓣总数（球形需要更密集）
 const GOLDEN_ANGLE = 2.39996323;    // 黄金角（弧度）≈ 137.508°
-const MAX_RADIUS = 1.1;             // 最大展开半径
-const MAX_HEIGHT = 0.7;             // 花朵最高点（花心）
+const BALL_RADIUS = 0.45;           // 球体半径（缩小！）
 
 // ===== 花瓣几何体 =====
 // 创建一个匙形花瓣（带卷曲），用于所有实例共享
@@ -144,16 +143,15 @@ const fragmentShader = /* glsl */ `
 
     base *= 0.9 + 0.1 * sin(u * 3.14159);
 
-    // ===== 能量波浪：从上到下循环流动 =====
-    // 波浪沿 aHeight 从1(顶部)向0(底部)传播
-    float waveSpeed = 0.8;
+    // ===== 能量波浪：从上到下循环流动（强化！） =====
+    float waveSpeed = 0.5;
     float wavePhase = vHeight - uTime * waveSpeed;
     float wave = sin(wavePhase * 6.2832) * 0.5 + 0.5;
-    wave = pow(wave, 3.0); // 更尖锐的脉冲
+    wave = pow(wave, 2.0); // 明亮的脉冲带
 
-    // 能量光晕颜色
-    vec3 energyColor = mix(vec3(0.7, 0.55, 0.95), core, vLayer);
-    base += energyColor * wave * 0.15;
+    // 能量光晕颜色 — 更亮
+    vec3 energyColor = mix(vec3(0.75, 0.60, 0.98), core, vLayer * 0.5);
+    base += energyColor * wave * 0.30; // 加强到 0.30
 
     // ===== 光照 =====
     vec3 L1 = normalize(vec3(0.2, 0.85, 0.4));
@@ -210,46 +208,49 @@ export default function Dahlia() {
     const dummy = new THREE.Object3D();
 
     for (let i = 0; i < PETAL_COUNT; i++) {
-      const t = i / PETAL_COUNT; // 0 → 1（从花心到外层）
+      const t = i / PETAL_COUNT; // 0 → 1（从花心顶部到外层底部）
 
-      // 黄金螺旋分布
+      // 黄金螺旋分布角
       const theta = i * GOLDEN_ANGLE;
 
-      // 径向距离：内层小，外层大
-      const radius = Math.pow(t, 0.6) * MAX_RADIUS;
+      // ===== 球面分布：花瓣紧密排列在球面上 =====
+      // phi: 极角，t=0 时在顶部(phi=0)，t=1 时在底部(phi≈135°)
+      // 使用 acos 分布让花瓣在球面上均匀
+      const phi = Math.acos(1.0 - t * 1.5); // 0 → ~135° 覆盖大部分球面
 
-      // 花瓣在球坐标的极角（展开角）
-      // 内层(t≈0)：极角小 → 竖直向上
-      // 外层(t≈1)：极角大 → 向外展开
-      const phi = t * Math.PI * 0.48; // 0 ~ ~86°
+      // 球面坐标 → 笛卡尔，球心在原点
+      const R = BALL_RADIUS;
+      const x = R * Math.sin(phi) * Math.cos(theta);
+      const z = R * Math.sin(phi) * Math.sin(theta);
+      const y = R * Math.cos(phi); // 顶部 y>0, 底部 y<0
 
-      // 球坐标转笛卡尔
-      const x = radius * Math.sin(phi) * Math.cos(theta);
-      const z = radius * Math.sin(phi) * Math.sin(theta);
-      const y = radius * Math.cos(phi);
+      // 花瓣大小：顶部(花心)小，底部(外层)大
+      const scale = 0.06 + t * 0.22; // 小花瓣，紧密排列
 
-      // 花瓣大小：内层小，外层大
-      const scale = 0.15 + t * 0.75;
+      // 大丽花花瓣卷曲程度：内层卷紧，外层微展
+      // （通过缩放 Y 轴模拟卷曲效果）
+      const scaleY = scale * (0.7 + t * 0.3);
 
-      dummy.position.set(x, y + 0.05, z);
+      dummy.position.set(x, y, z);
 
-      // 花瓣朝向：从花心向外指
+      // 花瓣朝向：从球心向外指
       const outDir = new THREE.Vector3(x, y, z).normalize();
       const target = new THREE.Vector3().copy(dummy.position).add(outDir);
       dummy.lookAt(target);
 
-      dummy.scale.set(scale, scale, scale);
+      dummy.scale.set(scale, scaleY, scale);
 
-      // 微小随机扰动
-      dummy.rotation.x += Math.sin(i * 137.508) * 0.05;
-      dummy.rotation.z += Math.cos(i * 73.0) * 0.04;
+      // 微小随机扰动让花瓣不那么机械
+      dummy.rotation.x += Math.sin(i * 137.508) * 0.08;
+      dummy.rotation.z += Math.cos(i * 73.0) * 0.06;
+      dummy.rotation.y += Math.sin(i * 53.0) * 0.04;
 
       dummy.updateMatrix();
       matrices.push(dummy.matrix.clone());
 
-      // aHeight: 1=花心(顶部), 0=外层(底部)
+      // aHeight: 1=顶部(花心), 0=底部(外层) — 用于波浪动画
       heights.push(1.0 - t);
-      // aLayer: 0=内层(花心), 1=外层
+      // aLayer: 0=内层(花心), 1=外层 — 用于颜色
       layers.push(t);
     }
 

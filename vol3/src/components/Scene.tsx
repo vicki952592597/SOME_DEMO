@@ -23,14 +23,14 @@ function SceneContent() {
   useFrame(({ camera, clock }) => {
     const t = clock.getElapsedTime();
     const angle = t * 0.025;
-    const dist = 3.0;
-    const pitch = 0.25;
+    const dist = 2.0; // 更近，适配缩小后的球形花
+    const pitch = 0.22;
     camera.position.set(
       Math.sin(angle) * dist * Math.cos(pitch),
-      Math.sin(pitch) * dist + 0.35,
+      Math.sin(pitch) * dist + 0.15,
       Math.cos(angle) * dist * Math.cos(pitch)
     );
-    camera.lookAt(0, 0.2, 0);
+    camera.lookAt(0, 0.0, 0); // 花朵球心在原点
   });
 
   return (
