@@ -6,56 +6,75 @@
 import { create } from 'zustand';
 
 export interface FlowerParams {
-  // === 花朵 ===
-  petalScale: number;       // 花瓣整体缩放 0.5~2.0
-  bloomWaveAmp: number;     // 生长波浪幅度 0~0.4
-  bloomWaveSpeed: number;   // 生长波浪传播速度 0.5~3.0
-  cycleDuration: number;    // 一个周期秒数 2~12
-  breatheAmp: number;       // 呼吸幅度 0~0.02
-  energyWaveSpeed: number;  // 能量光波速度 0.1~1.5
-  energyWaveStrength: number; // 能量光波强度 0~0.5
-  fresnelStrength: number;  // 菲涅尔边缘光强度 0~1.0
-  coreGlow: number;         // 花心辉光强度 0~1.5
+  // === 花朵造型 ===
+  petalScale: number;        // 花瓣整体缩放 0.3~2.0
+  petalLength: number;       // 花瓣长度系数 0.3~2.0
+  petalWidth: number;        // 花瓣宽度系数 0.3~2.0
+  ballRadius: number;        // 球体分布半径 0.05~0.35
+  openAngleScale: number;    // 花瓣张开角度系数 0.3~2.0 (越大越展开)
+  curlAmount: number;        // 花瓣卷曲程度 0~1.5
 
-  // === 颜色 ===
-  coreColor: [number, number, number];   // 花心颜色
-  outerColor: [number, number, number];  // 外层颜色
+  // === 动画 ===
+  bloomWaveAmp: number;      // 生长波浪幅度 0~0.5
+  bloomWaveSpeed: number;    // 传播速度系数 0.2~3.0 (未直接使用, 通过cycleDuration)
+  cycleDuration: number;     // 一个周期秒数 2~15
+  breatheAmp: number;        // 呼吸幅度 0~0.03
+  radialPulse: number;       // 径向脉冲幅度 0~0.08
+
+  // === 光效 ===
+  energyWaveSpeed: number;   // 能量光波速度 0.05~2.0
+  energyWaveStrength: number;// 能量光波强度 0~1.0
+  fresnelStrength: number;   // 菲涅尔边缘光强度 0~1.5
+  coreGlow: number;          // 花心辉光强度 0~2.0
+  specularStr: number;       // 高光强度 0~0.5
+  sssStrength: number;       // SSS 次表面散射强度 0~0.8
 
   // === 相机 ===
-  cameraDistance: number;     // 相机距离 1~5
-  autoRotateSpeed: number;    // 自转速度 0~0.1
-  mouseParallaxH: number;     // 鼠标水平视差强度 0~1.0
-  mouseParallaxV: number;     // 鼠标垂直视差强度 0~0.5
-  smoothFactor: number;       // 平滑系数 0.01~0.15
+  cameraDistance: number;
+  autoRotateSpeed: number;
+  mouseParallaxH: number;
+  mouseParallaxV: number;
+  smoothFactor: number;
 
   // === 花茎 ===
-  stemY: number;              // 花茎Y位置 -1~0
-  stemLength: number;         // 花茎长度 0.1~1.5
+  stemY: number;
+  stemLength: number;
 
   // === 背景 ===
-  starBrightness: number;     // 星空亮度 0~2.0
-  bgGlowStrength: number;    // 背景辉光强度 0~0.3
+  starBrightness: number;
+  bgGlowStrength: number;
 }
 
 export const defaultParams: FlowerParams = {
   petalScale: 1.0,
+  petalLength: 1.0,
+  petalWidth: 1.0,
+  ballRadius: 0.14,
+  openAngleScale: 1.0,
+  curlAmount: 0.45,
+
   bloomWaveAmp: 0.14,
   bloomWaveSpeed: 1.0,
   cycleDuration: 5.0,
   breatheAmp: 0.004,
+  radialPulse: 0.025,
+
   energyWaveSpeed: 0.4,
   energyWaveStrength: 0.22,
   fresnelStrength: 0.38,
   coreGlow: 0.55,
-  coreColor: [0.94, 0.86, 0.97],
-  outerColor: [0.23, 0.21, 0.50],
+  specularStr: 0.14,
+  sssStrength: 0.25,
+
   cameraDistance: 2.2,
   autoRotateSpeed: 0.015,
   mouseParallaxH: 0.45,
   mouseParallaxV: 0.2,
   smoothFactor: 0.04,
+
   stemY: -0.28,
   stemLength: 0.55,
+
   starBrightness: 1.0,
   bgGlowStrength: 0.04,
 };
