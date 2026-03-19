@@ -1,0 +1,47 @@
+/* ===== 全局样式 ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* 匹配参考图的深蓝紫背景 */
+  background: #0a0932;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+/* 全屏画布 */
+#gpuCanvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  cursor: crosshair;
+}
+
+/* WebGPU 降级提示 */
+#fallback {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, #1a0a40 0%, #0a0932 100%);
+  color: #8a7fbd;
+  text-align: center;
+  z-index: 100;
+}
+
+#fallback h1 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+#fallback p {
+  font-size: 1.1rem;
+  opacity: 0.7;
+}

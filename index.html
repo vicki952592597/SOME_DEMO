@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>交互式发光波动花朵 - WebGPU</title>
+  <link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+  <!-- 全屏画布 -->
+  <canvas id="gpuCanvas"></canvas>
+  <!-- WebGPU 不支持时的降级提示 -->
+  <div id="fallback" style="display:none;">
+    <h1>😔 您的浏览器不支持 WebGPU</h1>
+    <p>请使用最新版 Chrome/Edge（需开启 WebGPU 标志）或 Firefox Nightly。</p>
+  </div>
+  <script type="module" src="src/main.ts"></script>
+</body>
+</html>

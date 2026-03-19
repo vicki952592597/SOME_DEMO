@@ -1,0 +1,16 @@
+{
+  "name": "webgpu-glowing-flower",
+  "version": "1.0.0",
+  "description": "交互式发光波动花朵 - WebGPU 特效",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12",
+    "@webgpu/types": "^0.1.40"
+  }
+}
