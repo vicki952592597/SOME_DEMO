@@ -26,12 +26,12 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        working-directory: vol2
+        working-directory: vol3
         run: npm install
 
       - name: Build
-        working-directory: vol2
-        run: npx vite build
+        working-directory: vol3
+        run: npx next build
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -39,7 +39,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './vol2/dist'
+          path: './vol3/out'
 
   deploy:
     environment:
