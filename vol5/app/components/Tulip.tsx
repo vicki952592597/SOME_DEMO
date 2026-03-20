@@ -8,18 +8,19 @@
  * 0.45~0.70: 花苞形成 — 花苞从茎顶冒出并膨大
  * 0.70~1.00: 花朵绽放 — 花瓣逐片展开
  */
-import { useRef, useMemo, useEffect } from 'react';
-import { useFrame, useLoader } from '@react-three/fiber';
+import { useRef, useMemo } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { useGLTF } from '@react-three/drei';
 import { useStore } from '@/app/store';
 
-const BASE_PATH = process.env.NODE_ENV === 'production' ? '/SOME_DEMO/tulip' : '';
+const BASE_PATH = typeof window !== 'undefined' && window.location.pathname.includes('/tulip')
+  ? '/SOME_DEMO/tulip' : '';
 
 export default function Tulip() {
   const groupRef = useRef<THREE.Group>(null!);
   const timeRef = useRef(0);
-  const gltf = useLoader(GLTFLoader, `${BASE_PATH}/model/flower.glb`);
+  const gltf = useGLTF(`${BASE_PATH}/model/flower.glb`);
 
   // 克隆场景以免重复使用问题
   const scene = useMemo(() => {
