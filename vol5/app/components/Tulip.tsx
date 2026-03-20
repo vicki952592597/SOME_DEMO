@@ -186,48 +186,65 @@ export default function Tulip() {
         }
 
       } else if (cfg.type === 'pistil') {
-        // === 花蕊：跟随花苞从小到大 ===
+        // === 花蕊：从花心位置缓慢冒出 ===
         const pistP = easeOutCubic(localP);
-        mesh.scale.copy(initScale).multiplyScalar(Math.max(0.001, pistP));
-        mat.opacity = Math.min(localP * 3, 1);
-
-      } else if (cfg.type === 'petal') {
-        // === 花瓣：花苞→绽放 ===
-        // 前半段(0~0.5)：花苞形成（缩小紧闭）
-        // 后半段(0.5~1)：花瓣展开
-        const budPhase = Math.min(localP * 2, 1);    // 0~1 花苞
-        const bloomPhase = Math.max((localP - 0.5) * 2, 0); // 0~1 绽放
-
-        const budP = easeOutCubic(budPhase);
-        const bloomP = easeOutElastic(bloomPhase);
-
-        // 花苞阶段：从0缩放到0.5左右
-        // 绽放阶段：从0.5到1.0
-        const sc = budP * (0.5 + bloomP * 0.5);
-        mesh.scale.copy(initScale).multiplyScalar(Math.max(0.001, sc));
-        mat.opacity = Math.min(budPhase * 3, 1);
-
-        // 绽放旋转 — 花瓣向外展开
-        mesh.quaternion.copy(initQuat);
-        if (bloomP > 0.01) {
-          // 每片花瓣的展开轴由其初始位置决定
-          const wp = new THREE.Vector3();
-          mesh.getWorldPosition(wp);
-          const outDir = new THREE.Vector3(wp.x, 0, wp.z).normalize();
-          if (outDir.length() < 0.001) outDir.set(1, 0, 0);
-          const openAngle = bloomP * s.petalOpenAngle * 0.8;
-          const rotQ = new THREE.Quaternion().setFromAxisAngle(
-            new THREE.Vector3(-outDir.z, 0, outDir.x), // 切线方向
-            openAngle
-          );
-          mesh.quaternion.premultiply(rotQ);
+        const sc = Math.max(0.001, pistP);
+        mesh.scale.copy(initScale).multiplyScalar(sc);
+        mat.opacity = Math.min(localP * 4, 1);
+        // 花蕊微微颤动
+        if (pistP > 0.5) {
+          mesh.quaternion.copy(initQuat);
+          mesh.rotateX(Math.sin(t * 2.0) * 0.003 * pistP);
+          mesh.rotateZ(Math.cos(t * 1.7) * 0.003 * pistP);
         }
 
-        // 花瓣微颤
+      } else if (cfg.type === 'petal') {
+        // === 花瓣：从花蕊中心位置长出 → 逐渐到达最终位置 + 展开 ===
+        //
+        // 关键：花瓣不是原地缩放，而是从花蕊中心出发
+        // position 从花蕊中心 lerp 到最终位置
+        // scale 从极小 → 花苞大小 → 完全展开
+
+        const growPhase = Math.min(localP * 1.5, 1);  // 0~1 从花蕊长出到位
+        const bloomPhase = Math.max((localP - 0.6) * 2.5, 0); // 0~1 绽放展开
+
+        const growP = easeOutCubic(growPhase);
+        const bloomP = Math.min(easeOutElastic(Math.min(bloomPhase, 1)), 1);
+
+        // 位置：从花蕊中心 → 最终位置
+        // 花蕊中心在模型局部空间中（相对于 group1 父节点）
+        // 花瓣没有自己的 translation（initPos 都是 0,0,0）
+        // 所以不能直接 lerp position，需要用 scale 和旋转来模拟
+        
+        // 缩放：从几乎0 → 花苞紧闭(小) → 完全展开(正常)
+        const budScale = growP * 0.55;
+        const bloomScale = bloomP * 0.45;
+        const sc = Math.max(0.001, budScale + bloomScale);
+        mesh.scale.copy(initScale).multiplyScalar(sc);
+        mat.opacity = Math.min(growPhase * 3, 1);
+
+        // 旋转：花苞阶段花瓣紧闭（向内收拢），绽放时展开到初始姿态
+        mesh.quaternion.copy(initQuat);
+        
+        // 花苞时花瓣向花心方向内收（绕自身基部旋转）
+        // 收拢程度：1(完全闭合) → 0(完全展开到初始姿态)
+        const closeAmount = (1 - growP) * 0.8 + (1 - bloomP) * growP * 0.5;
+
+        // 获取花瓣相对花心的方向（在模型空间）
+        // 花蕊中心约 Z=-25.67，花瓣中心约 Z=-28~-29
+        // 花瓣向外 = Z 负方向偏移
+        // 内收 = 绕 X 或 Y 轴旋转让花瓣尖端朝上/朝内
+        const closeQ = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(1, 0, 0).normalize(),
+          closeAmount * 0.45 // 内收角度
+        );
+        mesh.quaternion.multiply(closeQ);
+
+        // 花瓣微颤（绽放后）
         if (bloomP > 0.2) {
-          const tr = Math.sin(t * 2.5 + (cfg.order || 0) * 1.3) * 0.003 * (1 - bloomP * 0.4);
+          const tr = Math.sin(t * 2.0 + (cfg.order || 0) * 1.1) * 0.003 * bloomP;
           mesh.rotateX(tr);
-          mesh.rotateZ(tr * 0.5 + windX * 0.001 * sc);
+          mesh.rotateZ(tr * 0.4 + windX * 0.001 * sc);
         }
       }
 
