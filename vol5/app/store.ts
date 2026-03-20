@@ -33,6 +33,9 @@ export interface TulipParams {
   directionalIntensity: number;
   sssStrength: number;
 
+  // 视角
+  viewMode: 'showcase' | 'free';
+
   // 风
   windStrength: number;
   windSpeed: number;
@@ -67,6 +70,8 @@ export const defaultParams: TulipParams = {
   ambientIntensity: 0.4,
   directionalIntensity: 1.2,
   sssStrength: 0.3,
+
+  viewMode: 'showcase',
 
   windStrength: 1.0,
   windSpeed: 0.5,

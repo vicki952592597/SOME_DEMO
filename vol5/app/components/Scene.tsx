@@ -1,6 +1,7 @@
 'use client';
 import { useRef, useEffect, Suspense } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { useStore } from '@/app/store';
 import Tulip from './Tulip';
@@ -15,17 +16,11 @@ function Background() {
       <planeGeometry args={[2, 2]} />
       <shaderMaterial
         ref={mat}
-        depthWrite={false}
-        depthTest={false}
-        uniforms={{
-          uTime: { value: 0 },
-        }}
+        depthWrite={false} depthTest={false}
+        uniforms={{ uTime: { value: 0 } }}
         vertexShader={`
           varying vec2 vUv;
-          void main() {
-            vUv = uv;
-            gl_Position = vec4(position.xy, 0.9999, 1.0);
-          }
+          void main() { vUv = uv; gl_Position = vec4(position.xy, 0.9999, 1.0); }
         `}
         fragmentShader={`
           uniform float uTime;
@@ -44,11 +39,7 @@ function Background() {
             vec3 col;
             if (t > 0.5) col = mix(mid, top, smoothstep(0.5, 1.0, t));
             else col = mix(bot, mid, smoothstep(0.0, 0.5, t));
-
-            // 底部大地感 
             col = mix(vec3(0.02, 0.03, 0.01), col, smoothstep(0.0, 0.15, t));
-
-            // 星空
             vec2 sg = uv * vec2(50.0, 30.0);
             vec2 sc = floor(sg);
             float sr = hash(sc);
@@ -60,7 +51,6 @@ function Background() {
               float tw = sin(uTime * (1.0 + sr * 2.5) + sr * 6.28) * 0.5 + 0.5;
               col += vec3(0.5, 0.5, 0.7) * star * (tw * 0.5 + 0.5) * 0.6 * smoothstep(0.25, 0.7, uv.y);
             }
-
             gl_FragColor = vec4(col, 1.0);
           }
         `}
@@ -69,7 +59,7 @@ function Background() {
   );
 }
 
-function CameraController() {
+function ShowcaseCamera() {
   const { camera } = useThree();
   const mouseRef = useRef({ x: 0, y: 0 });
   const targetRef = useRef({ x: 0, y: 0 });
@@ -85,34 +75,49 @@ function CameraController() {
 
   useFrame(() => {
     const s = useStore.getState();
-    const mx = mouseRef.current.x;
-    const my = mouseRef.current.y;
-    const sm = s.smoothFactor;
+    if (s.viewMode !== 'showcase') return;
 
-    targetRef.current.x += (mx * s.mouseParallaxH - targetRef.current.x) * sm;
-    targetRef.current.y += (-my * s.mouseParallaxV - targetRef.current.y) * sm;
+    const sm = s.smoothFactor;
+    targetRef.current.x += (mouseRef.current.x * s.mouseParallaxH - targetRef.current.x) * sm;
+    targetRef.current.y += (-mouseRef.current.y * s.mouseParallaxV - targetRef.current.y) * sm;
 
     const dist = s.cameraDistance;
     const angle = s.autoRotateSpeed * performance.now() * 0.001;
 
     camera.position.x = Math.sin(angle + targetRef.current.x) * dist;
     camera.position.z = Math.cos(angle + targetRef.current.x) * dist;
-    camera.position.y = 0.8 + targetRef.current.y;
-    camera.lookAt(0, 0.5, 0);
+    camera.position.y = 0.15 + targetRef.current.y;
+    camera.lookAt(0, 0.08, 0);
   });
 
   return null;
+}
+
+function FreeCamera() {
+  const viewMode = useStore((s) => s.viewMode);
+  if (viewMode !== 'free') return null;
+  return (
+    <OrbitControls
+      target={[0, 0.08, 0]}
+      enableDamping
+      dampingFactor={0.08}
+      minDistance={0.3}
+      maxDistance={8}
+      maxPolarAngle={Math.PI * 0.9}
+    />
+  );
 }
 
 export default function Scene() {
   return (
     <>
       <Background />
-      <CameraController />
-      <ambientLight intensity={0.4} />
+      <ShowcaseCamera />
+      <FreeCamera />
+      <ambientLight intensity={0.5} />
       <directionalLight position={[3, 5, 2]} intensity={1.2} color="#fff5ee" />
       <directionalLight position={[-2, 3, -3]} intensity={0.4} color="#c8b8ff" />
-      <pointLight position={[0, 2, 0]} intensity={0.3} color="#ffccdd" distance={5} />
+      <pointLight position={[0, 0.3, 0.2]} intensity={0.3} color="#ffccdd" distance={3} />
       <Suspense fallback={null}>
         <Tulip />
       </Suspense>
