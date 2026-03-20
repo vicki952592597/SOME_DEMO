@@ -25,6 +25,12 @@ jobs:
         with:
           node-version: 20
 
+      - name: Build VOL3 (dahlia-v3)
+        working-directory: vol3
+        run: |
+          npm install
+          npx next build
+
       - name: Build VOL4 (dahlia)
         working-directory: vol4
         run: |
@@ -34,9 +40,12 @@ jobs:
       - name: Assemble deploy folder
         run: |
           mkdir -p deploy/dahlia
-          # 复制大丽花到 /dahlia 子路径
+          mkdir -p deploy/dahlia-v3
+          # VOL4 大丽花 → /dahlia
           cp -r vol4/out/* deploy/dahlia/
-          # 复制根目录静态页面（synthesis 等）
+          # VOL3 大丽花 → /dahlia-v3
+          cp -r vol3/out/* deploy/dahlia-v3/
+          # 根目录静态页面
           cp vol4/public/crystal-synthesis.html deploy/
           cp vol4/public/guofeng-synthesis.html deploy/
           cp vol4/public/paper-synthesis.html deploy/
