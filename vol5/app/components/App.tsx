@@ -38,6 +38,35 @@ function ViewToggle() {
         }}>🖱️ 自由3D</button>
       </div>
 
+      {/* 动画 TAB */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap' as const, gap: 4,
+        background: 'rgba(6,14,6,0.90)', backdropFilter: 'blur(12px)',
+        border: '1px solid rgba(80,140,60,0.2)', borderRadius: 8,
+        padding: '8px 10px',
+      }}>
+        <span style={{ width: '100%', fontSize: 10, color: '#70a060', marginBottom: 2, fontWeight: 700 }}>🎬 动画效果</span>
+        {[
+          { id: 1, label: '🌱 生长', active: true },
+          { id: 2, label: '🌸 绽放', active: false },
+          { id: 3, label: '🍃 风动', active: false },
+          { id: 4, label: '✨ 发光', active: false },
+          { id: 5, label: '🌀 旋转', active: false },
+          { id: 6, label: '❄️ 凋零', active: false },
+        ].map(tab => (
+          <button key={tab.id} style={{
+            padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 5,
+            border: tab.active ? '1px solid rgba(80,180,60,0.4)' : '1px solid rgba(80,140,60,0.15)',
+            background: tab.active ? 'rgba(80,180,60,0.3)' : 'rgba(6,14,6,0.6)',
+            color: tab.active ? '#c0f0a0' : tab.id === 1 ? '#90b880' : '#506840',
+            cursor: tab.active ? 'pointer' : tab.id === 1 ? 'pointer' : 'not-allowed',
+            opacity: tab.id === 1 ? 1 : 0.5,
+          }}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* 自由视角时显示实时参数 */}
       {viewMode === 'free' && (
         <div style={{
