@@ -2,13 +2,15 @@
 /**
  * VOL5 郁金香 — 自然生长动画
  *
- * 分阶段、分部件：
- *  阶段1 (0~0.25): 出芽 — 茎从地面冒出，叶片紧贴茎萌发
- *  阶段2 (0.20~0.50): 拔节 — 茎快速拉长，叶片展开
- *  阶段3 (0.40~0.65): 花苞 — 花瓣从无到有，紧闭的花苞
- *  阶段4 (0.60~1.00): 绽放 — 花瓣逐片优雅展开
+ * 花瓣采用 ClipPlane 裁切法：从花蕊位置由内向外逐渐显露
  *
- * 每个部件有独立的 growth offset，不是简单 Y 裁切
+ * 模型数据（local 空间，父节点 group1 有 X轴90°旋转 + 0.01缩放）：
+ *   花瓣 geometry: Z ∈ [-34, -24]（Z=-24 是花蕊附近，Z=-34 是花瓣尖端）
+ *   花蕊 geometry: Z ∈ [-27, -25]
+ *   花瓣 pivot:    pos=[-0.38, 3.30, 0]
+ *
+ * 裁切方向：法线 (0,0,1)，即隐藏 Z > clipZ 的部分
+ *   clipZ 从 -24（只露花蕊处一点）→ -34（完全显露花瓣尖端）
  */
 import { useRef, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
@@ -19,23 +21,27 @@ import { useStore } from '@/app/store';
 const BASE_PATH = typeof window !== 'undefined' && window.location.pathname.includes('/tulip')
   ? '/SOME_DEMO/tulip' : '';
 
+// 花瓣 geometry 在 local Z 轴的范围
+const PETAL_Z_NEAR = -24;   // 花蕊端（最先显露）
+const PETAL_Z_FAR  = -35;   // 花瓣尖端（最后显露），多留1单位余量
+
 // 部件配置：每个部件的生长时间窗口
 const PART_CONFIG: Record<string, {
   type: 'stem' | 'petal' | 'pistil' | 'leaf';
-  growStart: number;  // 开始生长的 progress
-  growEnd: number;    // 完全长好的 progress
-  order?: number;     // 花瓣展开顺序
+  growStart: number;
+  growEnd: number;
+  order?: number;
 }> = {
   genjin:  { type: 'stem',   growStart: 0.00, growEnd: 0.40 },
   left1:   { type: 'leaf',   growStart: 0.08, growEnd: 0.45 },
   left2:   { type: 'leaf',   growStart: 0.12, growEnd: 0.48 },
   left3:   { type: 'leaf',   growStart: 0.15, growEnd: 0.50 },
   huarui:  { type: 'pistil', growStart: 0.35, growEnd: 0.60 },
-  huaban1: { type: 'petal',  growStart: 0.40, growEnd: 0.80, order: 0 },
-  huaban4: { type: 'petal',  growStart: 0.43, growEnd: 0.83, order: 1 },
-  huaban2: { type: 'petal',  growStart: 0.46, growEnd: 0.86, order: 2 },
-  huaban5: { type: 'petal',  growStart: 0.49, growEnd: 0.89, order: 3 },
-  huaban3: { type: 'petal',  growStart: 0.52, growEnd: 0.92, order: 4 },
+  huaban1: { type: 'petal',  growStart: 0.40, growEnd: 0.85, order: 0 },
+  huaban4: { type: 'petal',  growStart: 0.43, growEnd: 0.87, order: 1 },
+  huaban2: { type: 'petal',  growStart: 0.46, growEnd: 0.89, order: 2 },
+  huaban5: { type: 'petal',  growStart: 0.49, growEnd: 0.91, order: 3 },
+  huaban3: { type: 'petal',  growStart: 0.52, growEnd: 0.93, order: 4 },
   huaban6: { type: 'petal',  growStart: 0.55, growEnd: 0.95, order: 5 },
 };
 
@@ -48,10 +54,16 @@ export default function Tulip() {
     initQuat: THREE.Quaternion;
     initScale: THREE.Vector3;
     mat: THREE.MeshStandardMaterial;
+    clipPlane?: THREE.Plane;
   }>>(new Map());
 
   const gltf = useGLTF(`${BASE_PATH}/model/tulip-split.glb`);
   const { gl } = useThree();
+
+  // 启用 renderer 的 localClippingEnabled
+  useMemo(() => {
+    gl.localClippingEnabled = true;
+  }, [gl]);
 
   const colorTex = useMemo(() => {
     const tex = new THREE.TextureLoader().load(`${BASE_PATH}/model/color.png`);
@@ -68,7 +80,6 @@ export default function Tulip() {
     return tex;
   }, [gl]);
 
-  // 构建场景，使用 MeshStandardMaterial 让 Three.js 灯光正常工作
   const scene = useMemo(() => {
     const cloned = gltf.scene.clone(true);
     partsRef.current.clear();
@@ -76,6 +87,14 @@ export default function Tulip() {
     cloned.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
+        const cfg = PART_CONFIG[child.name];
+        const isPetal = cfg?.type === 'petal';
+
+        // 花瓣使用 clipping plane；其他部件不使用
+        const clipPlane = isPetal
+          ? new THREE.Plane(new THREE.Vector3(0, 0, 1), -PETAL_Z_NEAR) // 初始：隐藏所有（clipZ = PETAL_Z_NEAR）
+          : undefined;
+
         const mat = new THREE.MeshStandardMaterial({
           map: colorTex,
           roughnessMap: roughTex,
@@ -85,23 +104,12 @@ export default function Tulip() {
           transparent: true,
           opacity: 0,
           envMapIntensity: 0.3,
+          clippingPlanes: clipPlane ? [clipPlane] : [],
+          clipShadows: true,
         });
         mesh.material = mat;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-
-        // ★ DEBUG: 打印每个mesh的变换信息
-        const geo = mesh.geometry;
-        geo.computeBoundingBox();
-        const bb = geo.boundingBox;
-        console.log(`[MESH] ${child.name}`,
-          `pos=(${mesh.position.x.toFixed(3)}, ${mesh.position.y.toFixed(3)}, ${mesh.position.z.toFixed(3)})`,
-          `scale=(${mesh.scale.x.toFixed(3)}, ${mesh.scale.y.toFixed(3)}, ${mesh.scale.z.toFixed(3)})`,
-          `quat=(${mesh.quaternion.x.toFixed(4)}, ${mesh.quaternion.y.toFixed(4)}, ${mesh.quaternion.z.toFixed(4)}, ${mesh.quaternion.w.toFixed(4)})`,
-          bb ? `bbox=(${bb.min.x.toFixed(2)}~${bb.max.x.toFixed(2)}, ${bb.min.y.toFixed(2)}~${bb.max.y.toFixed(2)}, ${bb.min.z.toFixed(2)}~${bb.max.z.toFixed(2)})` : 'no bbox',
-          `parent=${mesh.parent?.name || 'none'}`,
-          `parentPos=(${mesh.parent?.position?.x?.toFixed(3) || 0}, ${mesh.parent?.position?.y?.toFixed(3) || 0}, ${mesh.parent?.position?.z?.toFixed(3) || 0})`
-        );
 
         partsRef.current.set(child.name, {
           mesh,
@@ -109,6 +117,7 @@ export default function Tulip() {
           initQuat: mesh.quaternion.clone(),
           initScale: mesh.scale.clone(),
           mat,
+          clipPlane,
         });
       }
     });
@@ -155,7 +164,7 @@ export default function Tulip() {
     const windZ = Math.cos(t * s.windSpeed * 0.3 + 1.5) * s.windStrength;
 
     partsRef.current.forEach((data, name) => {
-      const { mesh, initPos, initQuat, initScale, mat } = data;
+      const { mesh, initPos, initQuat, initScale, mat, clipPlane } = data;
       const cfg = PART_CONFIG[name];
       if (!cfg) return;
 
@@ -165,15 +174,13 @@ export default function Tulip() {
       ));
 
       if (cfg.type === 'stem') {
-        // === 茎：Y方向缩放从0→1，从地面拔起 ===
         const stemP = easeOutCubic(localP);
         mesh.scale.set(
-          initScale.x * (0.3 + stemP * 0.7),   // XZ稍微从细到粗
-          initScale.y * Math.max(0.001, stemP),  // Y方向拔节
+          initScale.x * (0.3 + stemP * 0.7),
+          initScale.y * Math.max(0.001, stemP),
           initScale.z * (0.3 + stemP * 0.7)
         );
         mat.opacity = Math.min(localP * 5, 1);
-        // 茎的微风
         mesh.quaternion.copy(initQuat);
         if (stemP > 0.3) {
           mesh.rotateZ(windX * 0.003 * stemP);
@@ -181,104 +188,91 @@ export default function Tulip() {
         }
 
       } else if (cfg.type === 'leaf') {
-        // === 叶片：从紧贴茎（缩小+内卷）到舒展 ===
         const leafP = easeOutBack(localP);
-        // 缩放生长
         const sc = Math.max(0.001, leafP);
         mesh.scale.copy(initScale).multiplyScalar(sc);
         mat.opacity = Math.min(localP * 4, 1);
-        // 叶片从卷曲到展开
         mesh.quaternion.copy(initQuat);
         const unfurl = (1 - leafP) * 0.6;
         mesh.rotateY(unfurl);
         mesh.rotateX(unfurl * 0.3);
-        // 风
         if (leafP > 0.3) {
           const lw = Math.sin(t * s.windSpeed * 0.6 + mesh.id * 2) * 0.008 * s.windStrength * leafP;
           mesh.rotateZ(lw);
         }
 
       } else if (cfg.type === 'pistil') {
-        // === 花蕊：纯 opacity 淡入，不动任何 transform ===
         mesh.scale.copy(initScale);
         mesh.quaternion.copy(initQuat);
         mesh.position.copy(initPos);
         mat.opacity = easeOutCubic(Math.min(localP * 2.5, 1));
 
       } else if (cfg.type === 'petal') {
-        // === 花瓣：专业级 花苞→绽放动画 ===
+        // === 花瓣：ClipPlane 裁切 + 绽放旋转 ===
         //
-        // 模型结构：
-        //   - 所有花瓣共享同一个 pivot 位置 [-0.379, 3.295, 0]（local空间）
-        //   - 父节点 group1 有 X轴90度旋转（Z-up→Y-up）+ 0.01缩放
-        //   - 花瓣自身无旋转 quat=[0,0,0,1]
-        //
-        // 动画策略：
-        //  (1) 从小到大缩放（保持position不变，从pivot点膨胀）
-        //  (2) 淡入
-        //  (3) 花苞闭合→绽放（Z轴旋转，因为父级90度翻转后Z=视觉上的"向上"）
-        //  (4) 呼吸脉动 + 摇曳
+        // 阶段拆分：
+        //   localP 0~0.6: 生长（clip plane 从花蕊推向花瓣尖端）
+        //   localP 0.3~1.0: 绽放（旋转展开 + 弹性回弹）
 
         const ord = cfg.order || 0;
 
-        // 还原所有变换到初始状态
+        // 还原变换
         mesh.position.copy(initPos);
         mesh.quaternion.copy(initQuat);
         mesh.scale.copy(initScale);
 
-        // ── (1) 缩放生长 ──
-        // 花瓣从 pivot 点以极小尺寸开始，均匀膨胀
-        const growPhase = Math.min(localP / 0.50, 1);  // 0~0.50 → 0~1
+        // ── (1) ClipPlane 生长：从花蕊由内向外显露 ──
+        // clipZ: PETAL_Z_NEAR(-24) → PETAL_Z_FAR(-35)
+        // Plane(normal=(0,0,1), constant=-clipZ)  裁切 Z > clipZ 的区域
+        const growPhase = Math.min(localP / 0.60, 1);
         const growEased = easeOutCubic(growPhase);
-        const sc = Math.max(0.001, growEased);
-        mesh.scale.multiplyScalar(sc);
+        const clipZ = PETAL_Z_NEAR + (PETAL_Z_FAR - PETAL_Z_NEAR) * growEased;
+        if (clipPlane) {
+          clipPlane.constant = -clipZ;
+        }
 
         // ── (2) 淡入 ──
         mat.opacity = easeOutCubic(Math.min(localP * 3.0, 1));
 
-        // ── (3) 花苞闭合→绽放 ──
-        // 在父节点空间中（group1 已X旋转90度），花瓣的local Z轴 = 视觉"上"方向
-        // 闭合 = 花瓣绕自身local Z轴向内收拢（实际不对——要用世界空间思考）
-        //
-        // 实测：父节点将Z-up变成Y-up。花瓣geometry在local空间中是沿Z延伸的。
-        // 闭合运动：花瓣向花蕊中心收拢 = 在local空间中绕 Z轴旋转
-        // 但每片花瓣的"内"方向不同，需要利用花瓣geometry的朝向。
-        //
-        // 简化方案：不旋转闭合，纯缩放+opacity 生长。
-        // 绽放效果改为：从紧闭到展开 = 从小缩放（花苞紧凑）到大（完全展开）
-        // 加上微量旋转来模拟花瓣的弹性打开
-
-        const bloomStart = 0.40;
+        // ── (3) 绽放旋转 ──
+        // 花瓣从初始位置（模型中已经是绽放姿态）先闭合（反向旋转），然后逐渐回到原位
+        // 在 local 空间中，花瓣沿 -Z 方向延伸，花蕊在 Z=-24 附近
+        // "闭合" = 花瓣绕 X 轴旋转使其竖直（向上收拢）
+        const bloomStart = 0.30;
         const rawBloom = Math.max((localP - bloomStart) / (1.0 - bloomStart), 0);
         const bloomP = easeOutBack(Math.min(rawBloom, 1));
+        const closeAmount = Math.max(1.0 - bloomP, 0);
 
-        // ── (4) 绽放微弹 ──
-        // 花瓣展开时，在各自local轴上加一个很小的弹性旋转，模拟"弹开"
-        if (rawBloom > 0 && rawBloom < 1) {
-          const elasticP = easeOutElastic(Math.min(rawBloom * 1.5, 1));
-          // 极小角度的弹性旋转，每片方向略不同
-          const angle = (1 - elasticP) * 0.06;
-          mesh.rotateZ(angle * (ord % 2 === 0 ? 1 : -1));
-          mesh.rotateX(angle * 0.3);
+        if (closeAmount > 0.003) {
+          // 花瓣向内收拢：绕 local X 轴旋转（因为 geometry 沿 -Z 延伸）
+          // 正角度 = 花瓣尖端向上翘（闭合）
+          const closeAngle = closeAmount * 0.45;
+          mesh.rotateX(-closeAngle);  // 负方向收拢
+
+          // 每片花瓣微小不对称
+          const sideAngle = closeAmount * 0.06 * (ord % 2 === 0 ? 1 : -1);
+          mesh.rotateY(sideAngle);
+        }
+
+        // ── (4) 绽放弹性微颤 ──
+        if (rawBloom > 0.05 && rawBloom < 0.95) {
+          const elasticP = easeOutElastic(Math.min(rawBloom * 1.3, 1));
+          const tremble = (1 - elasticP) * 0.03;
+          mesh.rotateX(Math.sin(rawBloom * 15 + ord * 2) * tremble);
+          mesh.rotateY(Math.cos(rawBloom * 10 + ord * 1.5) * tremble * 0.5);
         }
 
         // ── (5) 活态摇曳 ──
-        if (bloomP > 0.4) {
-          const liveAmt = Math.min((bloomP - 0.4) / 0.6, 1);
+        if (bloomP > 0.5) {
+          const liveAmt = Math.min((bloomP - 0.5) / 0.5, 1);
           const freq1 = 1.2 + ord * 0.15;
           const freq2 = 0.8 + ord * 0.12;
           const windEffect = windX * 0.002 * liveAmt;
           const breathe = Math.sin(t * 0.6 + ord * 1.0) * 0.002 * liveAmt;
 
-          mesh.rotateX(
-            Math.sin(t * freq1 + ord * 1.5) * 0.004 * liveAmt + breathe
-          );
-          mesh.rotateZ(
-            Math.sin(t * freq2 + ord * 2.1) * 0.003 * liveAmt + windEffect
-          );
-          mesh.rotateY(
-            Math.cos(t * freq1 * 0.5 + ord * 0.8) * 0.001 * liveAmt
-          );
+          mesh.rotateX(Math.sin(t * freq1 + ord * 1.5) * 0.004 * liveAmt + breathe);
+          mesh.rotateZ(Math.sin(t * freq2 + ord * 2.1) * 0.003 * liveAmt + windEffect);
+          mesh.rotateY(Math.cos(t * freq1 * 0.5 + ord * 0.8) * 0.001 * liveAmt);
         }
       }
 
