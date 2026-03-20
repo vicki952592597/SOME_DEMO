@@ -43,17 +43,26 @@ jobs:
           npm install --legacy-peer-deps
           npx next build
 
+      - name: Build VOL6 (tulip-v2)
+        working-directory: vol6
+        run: |
+          npm install --legacy-peer-deps
+          npx next build
+
       - name: Assemble deploy folder
         run: |
           mkdir -p deploy/dahlia
           mkdir -p deploy/dahlia-v3
           mkdir -p deploy/tulip
+          mkdir -p deploy/tulip-v2
           # VOL4 大丽花 → /dahlia
           cp -r vol4/out/* deploy/dahlia/
           # VOL3 大丽花 → /dahlia-v3
           cp -r vol3/out/* deploy/dahlia-v3/
           # VOL5 郁金香 → /tulip
           cp -r vol5/out/* deploy/tulip/
+          # VOL6 郁金香代码版 → /tulip-v2
+          cp -r vol6/out/* deploy/tulip-v2/
           # 根目录静态页面
           cp vol4/public/crystal-synthesis.html deploy/
           cp vol4/public/guofeng-synthesis.html deploy/
