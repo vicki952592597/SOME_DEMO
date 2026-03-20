@@ -90,6 +90,19 @@ export default function Tulip() {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
 
+        // ★ DEBUG: 打印每个mesh的变换信息
+        const geo = mesh.geometry;
+        geo.computeBoundingBox();
+        const bb = geo.boundingBox;
+        console.log(`[MESH] ${child.name}`,
+          `pos=(${mesh.position.x.toFixed(3)}, ${mesh.position.y.toFixed(3)}, ${mesh.position.z.toFixed(3)})`,
+          `scale=(${mesh.scale.x.toFixed(3)}, ${mesh.scale.y.toFixed(3)}, ${mesh.scale.z.toFixed(3)})`,
+          `quat=(${mesh.quaternion.x.toFixed(4)}, ${mesh.quaternion.y.toFixed(4)}, ${mesh.quaternion.z.toFixed(4)}, ${mesh.quaternion.w.toFixed(4)})`,
+          bb ? `bbox=(${bb.min.x.toFixed(2)}~${bb.max.x.toFixed(2)}, ${bb.min.y.toFixed(2)}~${bb.max.y.toFixed(2)}, ${bb.min.z.toFixed(2)}~${bb.max.z.toFixed(2)})` : 'no bbox',
+          `parent=${mesh.parent?.name || 'none'}`,
+          `parentPos=(${mesh.parent?.position?.x?.toFixed(3) || 0}, ${mesh.parent?.position?.y?.toFixed(3) || 0}, ${mesh.parent?.position?.z?.toFixed(3) || 0})`
+        );
+
         partsRef.current.set(child.name, {
           mesh,
           initPos: mesh.position.clone(),
@@ -193,70 +206,65 @@ export default function Tulip() {
         mat.opacity = easeOutCubic(Math.min(localP * 2.5, 1));
 
       } else if (cfg.type === 'petal') {
-        // === 花瓣：专业级 从花蕊位置生长→花苞→绽放 ===
+        // === 花瓣：专业级 花苞→绽放动画 ===
         //
-        // 5个子阶段叠加：
-        //  (1) 缩放生长：从极小逐渐长到原始大小（从pivot点即花蕊底部向外膨胀）
-        //  (2) 淡入：透明→不透明
-        //  (3) 主展开：花苞闭合→绽放，easeOutBack 带回弹
-        //  (4) 呼吸脉动：展开过程中的微妙颤振
-        //  (5) 活态摇曳：绽放后的自然风动
+        // 模型结构：
+        //   - 所有花瓣共享同一个 pivot 位置 [-0.379, 3.295, 0]（local空间）
+        //   - 父节点 group1 有 X轴90度旋转（Z-up→Y-up）+ 0.01缩放
+        //   - 花瓣自身无旋转 quat=[0,0,0,1]
+        //
+        // 动画策略：
+        //  (1) 从小到大缩放（保持position不变，从pivot点膨胀）
+        //  (2) 淡入
+        //  (3) 花苞闭合→绽放（Z轴旋转，因为父级90度翻转后Z=视觉上的"向上"）
+        //  (4) 呼吸脉动 + 摇曳
 
         const ord = cfg.order || 0;
 
-        // ── (1) 缩放生长 ──
-        // 花瓣从 pivot 点（花蕊底部）以极小尺寸开始，逐渐膨胀到原始大小
-        // 前60%的localP用于生长，后面用于绽放
-        const growPhase = Math.min(localP / 0.55, 1);       // 0~0.55 → 0~1
-        const growEased = easeOutCubic(growPhase);
-        const sc = Math.max(0.001, growEased);               // 从近乎0长到1
-
+        // 还原所有变换到初始状态
         mesh.position.copy(initPos);
         mesh.quaternion.copy(initQuat);
-        mesh.scale.set(
-          initScale.x * sc,
-          initScale.y * sc,
-          initScale.z * sc,
-        );
+        mesh.scale.copy(initScale);
+
+        // ── (1) 缩放生长 ──
+        // 花瓣从 pivot 点以极小尺寸开始，均匀膨胀
+        const growPhase = Math.min(localP / 0.50, 1);  // 0~0.50 → 0~1
+        const growEased = easeOutCubic(growPhase);
+        const sc = Math.max(0.001, growEased);
+        mesh.scale.multiplyScalar(sc);
 
         // ── (2) 淡入 ──
-        const appearP = Math.min(localP * 3.5, 1);
-        mat.opacity = easeOutCubic(appearP);
+        mat.opacity = easeOutCubic(Math.min(localP * 3.0, 1));
 
-        // ── (3) 主展开（花苞→绽放）──
-        // 在花瓣长到一定大小后才开始展开
-        const bloomStart = 0.35;  // localP 达到 0.35 后才开始展开
+        // ── (3) 花苞闭合→绽放 ──
+        // 在父节点空间中（group1 已X旋转90度），花瓣的local Z轴 = 视觉"上"方向
+        // 闭合 = 花瓣绕自身local Z轴向内收拢（实际不对——要用世界空间思考）
+        //
+        // 实测：父节点将Z-up变成Y-up。花瓣geometry在local空间中是沿Z延伸的。
+        // 闭合运动：花瓣向花蕊中心收拢 = 在local空间中绕 Z轴旋转
+        // 但每片花瓣的"内"方向不同，需要利用花瓣geometry的朝向。
+        //
+        // 简化方案：不旋转闭合，纯缩放+opacity 生长。
+        // 绽放效果改为：从紧闭到展开 = 从小缩放（花苞紧凑）到大（完全展开）
+        // 加上微量旋转来模拟花瓣的弹性打开
+
+        const bloomStart = 0.40;
         const rawBloom = Math.max((localP - bloomStart) / (1.0 - bloomStart), 0);
         const bloomP = easeOutBack(Math.min(rawBloom, 1));
 
-        // closeAmount: 1=花苞紧闭, 0=完全绽放
-        const closeAmount = Math.max(1.0 - bloomP, 0);
-
-        if (closeAmount > 0.003) {
-          // 主闭合：花瓣向上合拢（X轴）— 收拢角度更大，形成紧闭花苞
-          const mainClose = closeAmount * 0.65;
-          const qClose = new THREE.Quaternion().setFromAxisAngle(
-            new THREE.Vector3(1, 0, 0),
-            mainClose
-          );
-          mesh.quaternion.multiply(qClose);
-
-          // 辅助内收：花瓣略微向中轴线收拢（Z轴微旋转）
-          const sideClose = closeAmount * 0.10 * (ord % 2 === 0 ? 1 : -1);
-          mesh.rotateZ(sideClose);
-        }
-
-        // ── (4) 展开过程中的脉动 ──
-        if (rawBloom > 0.05 && rawBloom < 0.9) {
-          const pulsePhase = rawBloom * 12.0 + ord * 2.0;
-          const pulseAmp = Math.sin(rawBloom * Math.PI) * 0.012;
-          mesh.rotateX(Math.sin(pulsePhase) * pulseAmp);
-          mesh.rotateZ(Math.cos(pulsePhase * 0.7) * pulseAmp * 0.4);
+        // ── (4) 绽放微弹 ──
+        // 花瓣展开时，在各自local轴上加一个很小的弹性旋转，模拟"弹开"
+        if (rawBloom > 0 && rawBloom < 1) {
+          const elasticP = easeOutElastic(Math.min(rawBloom * 1.5, 1));
+          // 极小角度的弹性旋转，每片方向略不同
+          const angle = (1 - elasticP) * 0.06;
+          mesh.rotateZ(angle * (ord % 2 === 0 ? 1 : -1));
+          mesh.rotateX(angle * 0.3);
         }
 
         // ── (5) 活态摇曳 ──
-        if (bloomP > 0.5) {
-          const liveAmt = (bloomP - 0.5) * 2.0;
+        if (bloomP > 0.4) {
+          const liveAmt = Math.min((bloomP - 0.4) / 0.6, 1);
           const freq1 = 1.2 + ord * 0.15;
           const freq2 = 0.8 + ord * 0.12;
           const windEffect = windX * 0.002 * liveAmt;
