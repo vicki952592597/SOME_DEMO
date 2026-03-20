@@ -26,11 +26,11 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        working-directory: vol3
+        working-directory: vol4
         run: npm install
 
       - name: Build
-        working-directory: vol3
+        working-directory: vol4
         run: npx next build
 
       - name: Setup Pages
@@ -39,7 +39,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './vol3/out'
+          path: './vol4/out'
 
   deploy:
     environment:
