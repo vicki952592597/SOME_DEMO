@@ -193,32 +193,45 @@ export default function Tulip() {
         mat.opacity = easeOutCubic(Math.min(localP * 2.5, 1));
 
       } else if (cfg.type === 'petal') {
-        // === 花瓣：纯 opacity 从 0→1 淡入，不动任何 transform ===
-        // 
-        // 因为花瓣 origin 在 (0,0,0) 而顶点在 Z=-28，
-        // 任何 scale/rotation 都会导致严重位移。
-        // 所以只用 opacity 淡入，生长感靠花瓣间的时序差体现：
-        //   huaban1 从 40% 开始显现
-        //   huaban4 从 43% 开始
-        //   ...逐片出现
-        //   到 95% 全部完全不透明
+        // === 花瓣：花苞闭合 → 逐片绽放展开 ===
         //
-        // 淡入用较慢的渐变（不是突然出现），模拟花瓣从嫩到厚实
+        // 新模型花瓣有 translation (pivot在花蕊附近)
+        // 可以绕 pivot 旋转做花苞→绽放！
+        //
+        // 阶段1 (localP 0~0.4): 花瓣淡入，花苞紧闭状态
+        // 阶段2 (localP 0.4~1.0): 花瓣从闭合展开到初始姿态
 
+        const appearP = Math.min(localP * 2.5, 1);
+        const bloomP = easeOutCubic(Math.max((localP - 0.3) / 0.7, 0));
+
+        // 保持原始 scale
         mesh.scale.copy(initScale);
-        mesh.quaternion.copy(initQuat);
         mesh.position.copy(initPos);
 
-        // 缓慢淡入 (用 easeOutCubic 让前期更慢、后期加速到 1)
-        const fadeP = easeOutCubic(localP);
-        mat.opacity = fadeP;
+        // opacity 淡入
+        mat.opacity = easeOutCubic(appearP);
 
-        // 微风颤动（显现到一定程度后）
-        if (fadeP > 0.5) {
-          const intensity = (fadeP - 0.5) * 2.0 * 0.002;
+        // 花苞→绽放：旋转
+        // closeAmount: 1=花苞紧闭, 0=完全展开(模型初始姿态)
+        const closeAmount = 1.0 - bloomP;
+
+        mesh.quaternion.copy(initQuat);
+        if (closeAmount > 0.005) {
+          // 花瓣向上合拢（绕 X 轴旋转，让花瓣尖端朝上收拢）
+          const closeAngle = closeAmount * 0.5;
+          const closeQ = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(1, 0, 0),
+            closeAngle
+          );
+          mesh.quaternion.multiply(closeQ);
+        }
+
+        // 微风颤动（绽放后）
+        if (bloomP > 0.4) {
+          const intensity = (bloomP - 0.4) * 0.004;
           const tr = Math.sin(t * 1.8 + (cfg.order || 0) * 1.2);
           mesh.rotateX(tr * intensity);
-          mesh.rotateZ(tr * 0.4 * intensity + windX * 0.0005);
+          mesh.rotateZ(tr * 0.3 * intensity + windX * 0.0008);
         }
       }
 
