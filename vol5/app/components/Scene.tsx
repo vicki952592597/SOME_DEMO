@@ -137,10 +137,12 @@ export default function Scene() {
       <Background />
       <ShowcaseCamera />
       <FreeCamera />
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[3, 5, 2]} intensity={1.2} color="#fff5ee" />
-      <directionalLight position={[-2, 3, -3]} intensity={0.4} color="#c8b8ff" />
-      <pointLight position={[0, 0.3, 0.2]} intensity={0.3} color="#ffccdd" distance={3} />
+      <ambientLight intensity={0.6} color="#e8e0f0" />
+      <directionalLight position={[3, 5, 2]} intensity={1.8} color="#fff5ee" castShadow />
+      <directionalLight position={[-2, 4, -3]} intensity={0.7} color="#d0c8ff" />
+      <directionalLight position={[0, -1, 2]} intensity={0.3} color="#f0e8ff" />
+      <pointLight position={[0, 0.25, 0.15]} intensity={0.8} color="#ffd4e0" distance={2} decay={2} />
+      <hemisphereLight args={['#b8c8ff', '#2a3a1a', 0.35]} />
       <Suspense fallback={null}>
         <Tulip />
       </Suspense>
