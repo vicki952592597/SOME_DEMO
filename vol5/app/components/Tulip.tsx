@@ -70,14 +70,14 @@ function useTextures() {
     const color = loader.load(`${BASE_PATH}/model/color.png`);
     // GLB 内部贴图默认 flipY=false, 但外部 PNG 加载默认 flipY=true
     // 需要跟原始 GLB 的 UV 匹配 — 试两种，如果不对就反转
-    color.flipY = false;
+    color.flipY = true;
     color.colorSpace = THREE.SRGBColorSpace;
     color.anisotropy = maxAniso;
     color.wrapS = THREE.RepeatWrapping;
     color.wrapT = THREE.RepeatWrapping;
 
     const roughness = loader.load(`${BASE_PATH}/model/roughness.png`);
-    roughness.flipY = false;
+    roughness.flipY = true;
     roughness.anisotropy = maxAniso;
     roughness.wrapS = THREE.RepeatWrapping;
     roughness.wrapT = THREE.RepeatWrapping;
@@ -168,12 +168,22 @@ export default function Tulip() {
   }), [textures]);
 
   // 初始化：遍历场景，给每个部件替换材质 + 记录初始变换
+  // 不替换材质了，改用 MeshStandardMaterial + 贴图，保留 GLB 原始变换
   const scene = useMemo(() => {
     const cloned = gltf.scene.clone(true);
     cloned.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
-        mesh.material = flowerMat;
+        // 用标准材质 + 贴图
+        const mat = new THREE.MeshStandardMaterial({
+          map: textures.color,
+          roughnessMap: textures.roughness,
+          roughness: 0.5,
+          metalness: 0.0,
+          side: THREE.DoubleSide,
+          transparent: true,
+        });
+        mesh.material = mat;
         // 记录初始变换
         partsRef.current.set(child.name, {
           mesh,
@@ -184,15 +194,13 @@ export default function Tulip() {
       }
     });
     return cloned;
-  }, [gltf, flowerMat]);
+  }, [gltf, textures]);
 
   /* ===== 每帧驱动生长动画 ===== */
   useFrame((_, dt) => {
     const s = useStore.getState();
     timeRef.current += dt;
     const t = timeRef.current;
-
-    flowerMat.uniforms.uTime.value = t;
 
     // 计算生长进度
     let progress: number;
@@ -217,6 +225,10 @@ export default function Tulip() {
     const emerge = THREE.MathUtils.smoothstep(progress, 0.0, 0.08);
     group.visible = emerge > 0.001;
 
+    // 整体缩放生长 (从0到全尺寸)
+    const globalGrow = THREE.MathUtils.smoothstep(progress, 0.0, 0.5);
+    const easedGlobal = easeOutBack(globalGrow);
+
     // 风
     const windX = Math.sin(t * s.windSpeed * 0.4) * 0.012 * s.windStrength;
     const windZ = Math.cos(t * s.windSpeed * 0.3 + 1.5) * 0.006 * s.windStrength;
@@ -226,102 +238,80 @@ export default function Tulip() {
       const type = PART_TYPE[name];
 
       if (type === 'stem') {
-        // ===== 茎 — 从下向上逐段拔高 =====
+        // ===== 茎 — 从Y缩放实现拔节 =====
         const stemGrow = THREE.MathUtils.smoothstep(progress, 0.04, 0.42);
         const easedStem = easeOutBack(stemGrow);
-
-        mesh.scale.copy(initScale);
-        mesh.scale.y = Math.max(0.001, easedStem) * initScale.y;
-        mesh.position.copy(initPos);
-        // 茎底部固定，向上生长
-        mesh.position.y = initPos.y * easedStem;
-
-        // 整体不透明度
-        flowerMat.uniforms.uOpacity.value = THREE.MathUtils.clamp(emerge * 5, 0, 1);
-
-        // 茎的微微摇摆
-        mesh.rotation.z = windX * easedStem;
-        mesh.rotation.x = windZ * easedStem;
+        // 只改 local scale，不动 position/rotation（让父节点变换链完整）
+        mesh.scale.set(
+          initScale.x,
+          initScale.y * Math.max(0.001, easedStem),
+          initScale.z
+        );
 
       } else if (type === 'petal') {
         // ===== 花瓣 — 逐片绽放 =====
         const cfg = PETAL_CONFIG[name];
         if (!cfg) return;
 
-        // 花苞形成
-        const budStart = 0.30;
-        const budEnd = 0.52;
-        const budForm = THREE.MathUtils.smoothstep(progress, budStart, budEnd);
-        const easedBud = easeInOutCubic(budForm);
-
-        // 花瓣绽放（带个体延迟）
+        const budForm = THREE.MathUtils.smoothstep(progress, 0.30, 0.52);
         const bloomStart = 0.50 + cfg.delay;
         const bloomEnd = 0.88 + cfg.delay * 0.5;
         const bloom = THREE.MathUtils.smoothstep(progress, bloomStart, Math.min(bloomEnd, 0.98));
         const easedBloom = easeOutElastic(Math.min(bloom, 1));
 
-        // 缩放：从 0 → 花苞大小 → 完全展开
-        const sc = easedBud * (0.4 + easedBloom * 0.6);
+        // 缩放
+        const sc = easeInOutCubic(budForm) * (0.4 + easedBloom * 0.6);
         mesh.scale.copy(initScale).multiplyScalar(Math.max(0.001, sc));
 
-        // 展开旋转
-        const openAngle = cfg.openAngle * easedBloom;
+        // 展开：在初始旋转基础上叠加一个展开角
         mesh.quaternion.copy(initQuat);
-        const rotQ = new THREE.Quaternion().setFromAxisAngle(cfg.openAxis, openAngle);
-        mesh.quaternion.premultiply(rotQ);
-
-        // 花瓣微颤
-        if (bloom > 0.1) {
-          const tremble = Math.sin(t * 3.5 + cfg.order * 1.2) * 0.008 * (1 - bloom * 0.5);
-          mesh.rotation.x += tremble;
-          mesh.rotation.z += tremble * 0.6;
+        if (easedBloom > 0.001) {
+          const rotQ = new THREE.Quaternion().setFromAxisAngle(cfg.openAxis, cfg.openAngle * easedBloom);
+          mesh.quaternion.premultiply(rotQ);
         }
 
-        // 风中摇曳
-        mesh.rotation.z += windX * 0.5 * sc;
+        // 微颤 + 风
+        if (bloom > 0.1) {
+          const tr = Math.sin(t * 3.5 + cfg.order * 1.2) * 0.006 * (1 - bloom * 0.5);
+          mesh.rotateX(tr);
+          mesh.rotateZ(tr * 0.5 + windX * 0.3 * sc);
+        }
 
         mesh.visible = budForm > 0.01;
 
       } else if (type === 'pistil') {
-        // ===== 花蕊 — 花瓣展开后才显露 =====
-        const pistilShow = THREE.MathUtils.smoothstep(progress, 0.65, 0.85);
-        const easedPistil = easeOutBack(pistilShow);
-        mesh.scale.copy(initScale).multiplyScalar(Math.max(0.001, easedPistil));
-        mesh.visible = pistilShow > 0.01;
-
-        // 花蕊微微颤动
-        if (pistilShow > 0.5) {
-          mesh.rotation.x = Math.sin(t * 2.0) * 0.005;
-          mesh.rotation.z = Math.cos(t * 1.7) * 0.005;
+        const show = THREE.MathUtils.smoothstep(progress, 0.65, 0.85);
+        mesh.scale.copy(initScale).multiplyScalar(Math.max(0.001, easeOutBack(show)));
+        mesh.visible = show > 0.01;
+        if (show > 0.5) {
+          mesh.quaternion.copy(initQuat);
+          mesh.rotateX(Math.sin(t * 2.0) * 0.004);
+          mesh.rotateZ(Math.cos(t * 1.7) * 0.004);
         }
 
       } else if (type === 'leaf') {
-        // ===== 叶片 — 从紧贴茎到舒展 =====
         const cfg = LEAF_CONFIG[name] || { delay: 0 };
-        const leafStart = 0.10 + cfg.delay;
-        const leafEnd = 0.50 + cfg.delay;
-        const leafGrow = THREE.MathUtils.smoothstep(progress, leafStart, leafEnd);
-        const easedLeaf = easeOutBack(leafGrow);
+        const grow = THREE.MathUtils.smoothstep(progress, 0.10 + cfg.delay, 0.50 + cfg.delay);
+        const eased = easeOutBack(grow);
 
-        // 缩放生长
-        mesh.scale.copy(initScale);
-        mesh.scale.multiplyScalar(Math.max(0.001, easedLeaf));
+        mesh.scale.copy(initScale).multiplyScalar(Math.max(0.001, eased));
 
-        // 叶片从紧贴茎(卷曲)到展开 — 绕叶片基部外旋
-        const unfurlAngle = (1 - easedLeaf) * 0.4; // 未展开时贴合
+        // 叶片展开
         mesh.quaternion.copy(initQuat);
-        // 在初始旋转基础上叠加卷曲
-        const leafQ = new THREE.Quaternion().setFromAxisAngle(
-          new THREE.Vector3(0, 1, 0), unfurlAngle
-        );
-        mesh.quaternion.multiply(leafQ);
+        const unfurl = (1 - eased) * 0.35;
+        mesh.rotateY(unfurl);
 
-        // 风吹叶动
-        const leafWind = Math.sin(t * s.windSpeed * 0.6 + cfg.delay * 10) * 0.02 * s.windStrength * easedLeaf;
-        mesh.rotation.z += leafWind;
-        mesh.rotation.x += leafWind * 0.4;
+        // 风
+        const lw = Math.sin(t * s.windSpeed * 0.6 + cfg.delay * 10) * 0.015 * s.windStrength * eased;
+        mesh.rotateZ(lw);
 
-        mesh.visible = leafGrow > 0.01;
+        mesh.visible = grow > 0.01;
+      }
+
+      // 更新每个部件材质的透明度
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (mat && mat.opacity !== undefined) {
+        mat.opacity = THREE.MathUtils.clamp(emerge * 5, 0, 1);
       }
     });
 
@@ -331,7 +321,7 @@ export default function Tulip() {
   });
 
   return (
-    <group ref={groupRef} position={[0, -0.15, 0]}>
+    <group ref={groupRef} position={[0, -0.12, 0]}>
       <primitive object={scene} />
     </group>
   );
