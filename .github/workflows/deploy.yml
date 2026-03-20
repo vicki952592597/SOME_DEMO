@@ -25,13 +25,21 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
+      - name: Build VOL4 (dahlia)
         working-directory: vol4
-        run: npm install
+        run: |
+          npm install
+          npx next build
 
-      - name: Build
-        working-directory: vol4
-        run: npx next build
+      - name: Assemble deploy folder
+        run: |
+          mkdir -p deploy/dahlia
+          # 复制大丽花到 /dahlia 子路径
+          cp -r vol4/out/* deploy/dahlia/
+          # 复制根目录静态页面（synthesis 等）
+          cp vol4/public/crystal-synthesis.html deploy/
+          cp vol4/public/guofeng-synthesis.html deploy/
+          cp vol4/public/paper-synthesis.html deploy/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -39,7 +47,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './vol4/out'
+          path: './deploy'
 
   deploy:
     environment:
