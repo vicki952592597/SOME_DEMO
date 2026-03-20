@@ -167,23 +167,21 @@ export default function Tulip() {
     depthWrite: true,
   }), [textures]);
 
-  // 初始化：遍历场景，给每个部件替换材质 + 记录初始变换
-  // 不替换材质了，改用 MeshStandardMaterial + 贴图，保留 GLB 原始变换
+  // 第一步：原样显示模型，不做任何变换修改
+  // 使用 GLB 自带的材质，仅确保 doubleSide + 贴图
   const scene = useMemo(() => {
     const cloned = gltf.scene.clone(true);
     cloned.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
-        // 用标准材质 + 贴图
-        const mat = new THREE.MeshStandardMaterial({
-          map: textures.color,
-          roughnessMap: textures.roughness,
-          roughness: 0.5,
-          metalness: 0.0,
-          side: THREE.DoubleSide,
-          transparent: true,
-        });
-        mesh.material = mat;
+        const origMat = mesh.material as THREE.MeshStandardMaterial;
+        if (origMat) {
+          // 保留 GLB 原始材质，只加贴图和 doubleSide
+          origMat.map = textures.color;
+          origMat.roughnessMap = textures.roughness;
+          origMat.side = THREE.DoubleSide;
+          origMat.needsUpdate = true;
+        }
         // 记录初始变换
         partsRef.current.set(child.name, {
           mesh,
@@ -196,132 +194,19 @@ export default function Tulip() {
     return cloned;
   }, [gltf, textures]);
 
-  /* ===== 每帧驱动生长动画 ===== */
-  useFrame((_, dt) => {
-    const s = useStore.getState();
-    timeRef.current += dt;
-    const t = timeRef.current;
-
-    // 计算生长进度
-    let progress: number;
-    if (s.autoPlay) {
-      const cycle = s.growthDuration;
-      if (s.loopMode === 'loop') {
-        progress = (t % cycle) / cycle;
-      } else if (s.loopMode === 'pingpong') {
-        const phase = (t % (cycle * 2)) / cycle;
-        progress = phase <= 1 ? phase : 2 - phase;
-      } else {
-        progress = Math.min(t / cycle, 1);
-      }
-    } else {
-      progress = Math.max(0, Math.min(1, s.growthProgress));
-    }
-
+  // 暂时不做动画，先确保模型正确显示
+  useFrame(() => {
+    // 仅风效微动
+    const t = performance.now() * 0.001;
     const group = groupRef.current;
     if (!group) return;
-
-    // ===== 全局 =====
-    const emerge = THREE.MathUtils.smoothstep(progress, 0.0, 0.08);
-    group.visible = emerge > 0.001;
-
-    // 整体缩放生长 (从0到全尺寸)
-    const globalGrow = THREE.MathUtils.smoothstep(progress, 0.0, 0.5);
-    const easedGlobal = easeOutBack(globalGrow);
-
-    // 风
-    const windX = Math.sin(t * s.windSpeed * 0.4) * 0.012 * s.windStrength;
-    const windZ = Math.cos(t * s.windSpeed * 0.3 + 1.5) * 0.006 * s.windStrength;
-
-    partsRef.current.forEach((data, name) => {
-      const { mesh, initPos, initQuat, initScale } = data;
-      const type = PART_TYPE[name];
-
-      if (type === 'stem') {
-        // ===== 茎 — 从Y缩放实现拔节 =====
-        const stemGrow = THREE.MathUtils.smoothstep(progress, 0.04, 0.42);
-        const easedStem = easeOutBack(stemGrow);
-        // 只改 local scale，不动 position/rotation（让父节点变换链完整）
-        mesh.scale.set(
-          initScale.x,
-          initScale.y * Math.max(0.001, easedStem),
-          initScale.z
-        );
-
-      } else if (type === 'petal') {
-        // ===== 花瓣 — 逐片绽放 =====
-        const cfg = PETAL_CONFIG[name];
-        if (!cfg) return;
-
-        const budForm = THREE.MathUtils.smoothstep(progress, 0.30, 0.52);
-        const bloomStart = 0.50 + cfg.delay;
-        const bloomEnd = 0.88 + cfg.delay * 0.5;
-        const bloom = THREE.MathUtils.smoothstep(progress, bloomStart, Math.min(bloomEnd, 0.98));
-        const easedBloom = easeOutElastic(Math.min(bloom, 1));
-
-        // 缩放
-        const sc = easeInOutCubic(budForm) * (0.4 + easedBloom * 0.6);
-        mesh.scale.copy(initScale).multiplyScalar(Math.max(0.001, sc));
-
-        // 展开：在初始旋转基础上叠加一个展开角
-        mesh.quaternion.copy(initQuat);
-        if (easedBloom > 0.001) {
-          const rotQ = new THREE.Quaternion().setFromAxisAngle(cfg.openAxis, cfg.openAngle * easedBloom);
-          mesh.quaternion.premultiply(rotQ);
-        }
-
-        // 微颤 + 风
-        if (bloom > 0.1) {
-          const tr = Math.sin(t * 3.5 + cfg.order * 1.2) * 0.006 * (1 - bloom * 0.5);
-          mesh.rotateX(tr);
-          mesh.rotateZ(tr * 0.5 + windX * 0.3 * sc);
-        }
-
-        mesh.visible = budForm > 0.01;
-
-      } else if (type === 'pistil') {
-        const show = THREE.MathUtils.smoothstep(progress, 0.65, 0.85);
-        mesh.scale.copy(initScale).multiplyScalar(Math.max(0.001, easeOutBack(show)));
-        mesh.visible = show > 0.01;
-        if (show > 0.5) {
-          mesh.quaternion.copy(initQuat);
-          mesh.rotateX(Math.sin(t * 2.0) * 0.004);
-          mesh.rotateZ(Math.cos(t * 1.7) * 0.004);
-        }
-
-      } else if (type === 'leaf') {
-        const cfg = LEAF_CONFIG[name] || { delay: 0 };
-        const grow = THREE.MathUtils.smoothstep(progress, 0.10 + cfg.delay, 0.50 + cfg.delay);
-        const eased = easeOutBack(grow);
-
-        mesh.scale.copy(initScale).multiplyScalar(Math.max(0.001, eased));
-
-        // 叶片展开
-        mesh.quaternion.copy(initQuat);
-        const unfurl = (1 - eased) * 0.35;
-        mesh.rotateY(unfurl);
-
-        // 风
-        const lw = Math.sin(t * s.windSpeed * 0.6 + cfg.delay * 10) * 0.015 * s.windStrength * eased;
-        mesh.rotateZ(lw);
-
-        mesh.visible = grow > 0.01;
-      }
-
-      // 更新每个部件材质的透明度
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (mat && mat.opacity !== undefined) {
-        mat.opacity = THREE.MathUtils.clamp(emerge * 5, 0, 1);
-      }
-    });
-
-    // 整体风摇
-    group.rotation.z = windX * emerge;
-    group.rotation.x = windZ * emerge;
+    const s = useStore.getState();
+    group.rotation.z = Math.sin(t * s.windSpeed * 0.4) * 0.005 * s.windStrength;
+    group.rotation.x = Math.cos(t * s.windSpeed * 0.3) * 0.003 * s.windStrength;
   });
 
   return (
-    <group ref={groupRef} position={[0, -0.12, 0]}>
+    <group ref={groupRef} position={[0, -0.15, 0]}>
       <primitive object={scene} />
     </group>
   );
