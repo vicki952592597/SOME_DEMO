@@ -1,5 +1,5 @@
 'use client';
-import { useRef, Suspense } from 'react';
+import { useRef, useEffect, Suspense } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStore } from '@/app/store';
@@ -74,17 +74,17 @@ function CameraController() {
   const mouseRef = useRef({ x: 0, y: 0 });
   const targetRef = useRef({ x: 0, y: 0 });
 
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      mouseRef.current.x = (e.clientX / window.innerWidth - 0.5) * 2;
+      mouseRef.current.y = (e.clientY / window.innerHeight - 0.5) * 2;
+    };
+    window.addEventListener('mousemove', onMove);
+    return () => window.removeEventListener('mousemove', onMove);
+  }, []);
+
   useFrame(() => {
     const s = useStore.getState();
-    // 鼠标跟踪
-    if (typeof window !== 'undefined') {
-      const onMove = (e: MouseEvent) => {
-        mouseRef.current.x = (e.clientX / window.innerWidth - 0.5) * 2;
-        mouseRef.current.y = (e.clientY / window.innerHeight - 0.5) * 2;
-      };
-      window.addEventListener('mousemove', onMove, { once: true });
-    }
-
     const mx = mouseRef.current.x;
     const my = mouseRef.current.y;
     const sm = s.smoothFactor;
