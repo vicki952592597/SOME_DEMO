@@ -33,6 +33,10 @@ export interface TulipParams {
   directionalIntensity: number;
   sssStrength: number;
 
+  // 风
+  windStrength: number;
+  windSpeed: number;
+
   // 背景
   bgTopColor: string;
   bgBottomColor: string;
@@ -63,6 +67,9 @@ export const defaultParams: TulipParams = {
   ambientIntensity: 0.4,
   directionalIntensity: 1.2,
   sssStrength: 0.3,
+
+  windStrength: 1.0,
+  windSpeed: 0.5,
 
   bgTopColor: '#050510',
   bgBottomColor: '#1a1040',
