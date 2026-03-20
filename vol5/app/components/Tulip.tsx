@@ -193,45 +193,76 @@ export default function Tulip() {
         mat.opacity = easeOutCubic(Math.min(localP * 2.5, 1));
 
       } else if (cfg.type === 'petal') {
-        // === 花瓣：花苞闭合 → 逐片绽放展开 ===
+        // === 花瓣：专业级花苞→绽放动画 ===
         //
-        // 新模型花瓣有 translation (pivot在花蕊附近)
-        // 可以绕 pivot 旋转做花苞→绽放！
-        //
-        // 阶段1 (localP 0~0.4): 花瓣淡入，花苞紧闭状态
-        // 阶段2 (localP 0.4~1.0): 花瓣从闭合展开到初始姿态
+        // 4个子阶段叠加：
+        //  (1) 淡入：从透明到不透明
+        //  (2) 主展开：花苞闭合→展开，easeOutBack 带回弹
+        //  (3) 呼吸脉动：展开过程中的微妙缩放波动
+        //  (4) 活态摇曳：绽放后的自然风动
 
-        const appearP = Math.min(localP * 2.5, 1);
-        const bloomP = easeOutCubic(Math.max((localP - 0.3) / 0.7, 0));
+        const ord = cfg.order || 0;
 
-        // 保持原始 scale
-        mesh.scale.copy(initScale);
-        mesh.position.copy(initPos);
-
-        // opacity 淡入
+        // ── (1) 淡入 ──
+        const appearP = Math.min(localP * 3.0, 1);
         mat.opacity = easeOutCubic(appearP);
 
-        // 花苞→绽放：旋转
-        // closeAmount: 1=花苞紧闭, 0=完全展开(模型初始姿态)
-        const closeAmount = 1.0 - bloomP;
+        // ── (2) 主展开 ──
+        // 展开分两段：先快后慢，带轻微过冲（回弹）
+        const rawBloom = Math.max((localP - 0.15) / 0.85, 0);
+        const bloomP = easeOutBack(Math.min(rawBloom, 1));
 
+        // closeAmount: 1=花苞紧闭, 0=完全绽放
+        const closeAmount = Math.max(1.0 - bloomP, 0);
+
+        mesh.scale.copy(initScale);
+        mesh.position.copy(initPos);
         mesh.quaternion.copy(initQuat);
-        if (closeAmount > 0.005) {
-          // 花瓣向上合拢（绕 X 轴旋转，让花瓣尖端朝上收拢）
-          const closeAngle = closeAmount * 0.5;
-          const closeQ = new THREE.Quaternion().setFromAxisAngle(
+
+        if (closeAmount > 0.003) {
+          // 主闭合：花瓣向上合拢（X轴）
+          const mainClose = closeAmount * 0.55;
+          const qClose = new THREE.Quaternion().setFromAxisAngle(
             new THREE.Vector3(1, 0, 0),
-            closeAngle
+            mainClose
           );
-          mesh.quaternion.multiply(closeQ);
+          mesh.quaternion.multiply(qClose);
+
+          // 辅助内收：花瓣略微向中轴线收拢（Z轴微旋转）
+          // 给每片花瓣不同的收拢偏移，避免完全对称
+          const sideClose = closeAmount * 0.08 * (ord % 2 === 0 ? 1 : -1);
+          mesh.rotateZ(sideClose);
         }
 
-        // 微风颤动（绽放后）
-        if (bloomP > 0.4) {
-          const intensity = (bloomP - 0.4) * 0.004;
-          const tr = Math.sin(t * 1.8 + (cfg.order || 0) * 1.2);
-          mesh.rotateX(tr * intensity);
-          mesh.rotateZ(tr * 0.3 * intensity + windX * 0.0008);
+        // ── (3) 展开过程中的脉动 ──
+        // 模拟花瓣展开时的微妙颤振，像真花受到内部张力释放
+        if (rawBloom > 0.05 && rawBloom < 0.9) {
+          const pulsePhase = rawBloom * 12.0 + ord * 2.0;
+          const pulseAmp = Math.sin(rawBloom * Math.PI) * 0.015; // 中段最强
+          mesh.rotateX(Math.sin(pulsePhase) * pulseAmp);
+          mesh.rotateZ(Math.cos(pulsePhase * 0.7) * pulseAmp * 0.5);
+        }
+
+        // ── (4) 活态摇曳 ──
+        // 绽放后，花瓣随风自然晃动，每片频率略不同
+        if (bloomP > 0.5) {
+          const liveAmt = (bloomP - 0.5) * 2.0;
+          const freq1 = 1.2 + ord * 0.15;
+          const freq2 = 0.8 + ord * 0.12;
+          const windEffect = windX * 0.002 * liveAmt;
+          const breathe = Math.sin(t * 0.6 + ord * 1.0) * 0.002 * liveAmt;
+
+          mesh.rotateX(
+            Math.sin(t * freq1 + ord * 1.5) * 0.004 * liveAmt
+            + breathe
+          );
+          mesh.rotateZ(
+            Math.sin(t * freq2 + ord * 2.1) * 0.003 * liveAmt
+            + windEffect
+          );
+          mesh.rotateY(
+            Math.cos(t * freq1 * 0.5 + ord * 0.8) * 0.001 * liveAmt
+          );
         }
       }
 
