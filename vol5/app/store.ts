@@ -35,6 +35,11 @@ export interface TulipParams {
 
   // 视角
   viewMode: 'showcase' | 'free';
+  showcasePos: [number, number, number];
+  showcaseTarget: [number, number, number];
+  // 实时相机位置（自由视角下显示）
+  liveCamPos: [number, number, number];
+  liveCamTarget: [number, number, number];
 
   // 风
   windStrength: number;
@@ -72,6 +77,10 @@ export const defaultParams: TulipParams = {
   sssStrength: 0.3,
 
   viewMode: 'showcase',
+  showcasePos: [0, 0.2, 0.8],
+  showcaseTarget: [0, 0.08, 0],
+  liveCamPos: [0, 0.2, 0.8],
+  liveCamTarget: [0, 0.08, 0],
 
   windStrength: 1.0,
   windSpeed: 0.5,

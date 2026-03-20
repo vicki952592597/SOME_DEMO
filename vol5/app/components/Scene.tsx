@@ -77,17 +77,17 @@ function ShowcaseCamera() {
     const s = useStore.getState();
     if (s.viewMode !== 'showcase') return;
 
+    const [sx, sy, sz] = s.showcasePos;
+    const [tx, ty, tz] = s.showcaseTarget;
     const sm = s.smoothFactor;
+
     targetRef.current.x += (mouseRef.current.x * s.mouseParallaxH - targetRef.current.x) * sm;
     targetRef.current.y += (-mouseRef.current.y * s.mouseParallaxV - targetRef.current.y) * sm;
 
-    const dist = s.cameraDistance;
-    const angle = s.autoRotateSpeed * performance.now() * 0.001;
-
-    camera.position.x = Math.sin(angle + targetRef.current.x) * dist;
-    camera.position.z = Math.cos(angle + targetRef.current.x) * dist;
-    camera.position.y = 0.15 + targetRef.current.y;
-    camera.lookAt(0, 0.08, 0);
+    camera.position.x = sx + targetRef.current.x * 0.3;
+    camera.position.y = sy + targetRef.current.y * 0.15;
+    camera.position.z = sz;
+    camera.lookAt(tx, ty, tz);
   });
 
   return null;
@@ -95,15 +95,38 @@ function ShowcaseCamera() {
 
 function FreeCamera() {
   const viewMode = useStore((s) => s.viewMode);
+  const controlsRef = useRef<any>(null);
+
+  // 实时上报相机位置
+  useFrame(({ camera }) => {
+    if (viewMode !== 'free') return;
+    const p = camera.position;
+    const ctrl = controlsRef.current;
+    const t = ctrl ? ctrl.target : { x: 0, y: 0.08, z: 0 };
+    useStore.getState().set({
+      liveCamPos: [
+        Math.round(p.x * 1000) / 1000,
+        Math.round(p.y * 1000) / 1000,
+        Math.round(p.z * 1000) / 1000,
+      ],
+      liveCamTarget: [
+        Math.round(t.x * 1000) / 1000,
+        Math.round(t.y * 1000) / 1000,
+        Math.round(t.z * 1000) / 1000,
+      ],
+    });
+  });
+
   if (viewMode !== 'free') return null;
   return (
     <OrbitControls
+      ref={controlsRef}
       target={[0, 0.08, 0]}
       enableDamping
       dampingFactor={0.08}
-      minDistance={0.3}
+      minDistance={0.1}
       maxDistance={8}
-      maxPolarAngle={Math.PI * 0.9}
+      maxPolarAngle={Math.PI * 0.95}
     />
   );
 }
