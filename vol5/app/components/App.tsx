@@ -6,6 +6,7 @@ import { useStore } from '@/app/store';
 
 function ViewToggle() {
   const viewMode = useStore((s) => s.viewMode);
+  const activeTab = useStore((s) => s.activeTab);
   const liveCamPos = useStore((s) => s.liveCamPos);
   const liveCamTarget = useStore((s) => s.liveCamTarget);
   const set = useStore((s) => s.set);
@@ -47,24 +48,26 @@ function ViewToggle() {
       }}>
         <span style={{ width: '100%', fontSize: 10, color: '#70a060', marginBottom: 2, fontWeight: 700 }}>🎬 动画效果</span>
         {[
-          { id: 1, label: '🌱 生长', active: true },
-          { id: 2, label: '🌸 绽放', active: false },
-          { id: 3, label: '🍃 风动', active: false },
-          { id: 4, label: '✨ 发光', active: false },
-          { id: 5, label: '🌀 旋转', active: false },
-          { id: 6, label: '❄️ 凋零', active: false },
-        ].map(tab => (
-          <button key={tab.id} style={{
-            padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 5,
-            border: tab.active ? '1px solid rgba(80,180,60,0.4)' : '1px solid rgba(80,140,60,0.15)',
-            background: tab.active ? 'rgba(80,180,60,0.3)' : 'rgba(6,14,6,0.6)',
-            color: tab.active ? '#c0f0a0' : tab.id === 1 ? '#90b880' : '#506840',
-            cursor: tab.active ? 'pointer' : tab.id === 1 ? 'pointer' : 'not-allowed',
-            opacity: tab.id === 1 ? 1 : 0.5,
-          }}>
-            {tab.label}
-          </button>
-        ))}
+          { id: 1, label: '🌱 生长' },
+          { id: 2, label: '🌸 绽放' },
+          { id: 3, label: '🍃 风动' },
+          { id: 4, label: '✨ 发光' },
+          { id: 5, label: '🌀 旋转' },
+          { id: 6, label: '🥀 凋零' },
+        ].map(tab => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button key={tab.id} onClick={() => set({ activeTab: tab.id })} style={{
+              padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 5,
+              border: isActive ? '1px solid rgba(80,180,60,0.4)' : '1px solid rgba(80,140,60,0.15)',
+              background: isActive ? 'rgba(80,180,60,0.3)' : 'rgba(6,14,6,0.6)',
+              color: isActive ? '#c0f0a0' : '#90b880',
+              cursor: 'pointer',
+            }}>
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* 自由视角时显示实时参数 */}

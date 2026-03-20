@@ -45,6 +45,9 @@ export interface TulipParams {
   windStrength: number;
   windSpeed: number;
 
+  // 动画Tab
+  activeTab: number;   // 1~6
+
   // 背景
   bgTopColor: string;
   bgBottomColor: string;
@@ -84,6 +87,8 @@ export const defaultParams: TulipParams = {
 
   windStrength: 1.0,
   windSpeed: 0.5,
+
+  activeTab: 1,
 
   bgTopColor: '#050510',
   bgBottomColor: '#1a1040',
