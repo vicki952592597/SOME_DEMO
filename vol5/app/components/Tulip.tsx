@@ -186,62 +186,39 @@ export default function Tulip() {
         }
 
       } else if (cfg.type === 'pistil') {
-        // === 花蕊：从花心位置淡入 ===
-        const pistP = easeOutCubic(localP);
-        // 不改 scale（避免偏移），只用 opacity
+        // === 花蕊：纯 opacity 淡入，不动任何 transform ===
         mesh.scale.copy(initScale);
-        mat.opacity = Math.min(localP * 3, 1);
-        // 花蕊微微颤动
         mesh.quaternion.copy(initQuat);
-        if (pistP > 0.3) {
-          mesh.rotateX(Math.sin(t * 2.0) * 0.003 * pistP);
-          mesh.rotateZ(Math.cos(t * 1.7) * 0.003 * pistP);
-        }
+        mesh.position.copy(initPos);
+        mat.opacity = easeOutCubic(Math.min(localP * 2.5, 1));
 
       } else if (cfg.type === 'petal') {
-        // === 花瓣：一层层从内往外淡入 + 花苞闭合→绽放展开 ===
+        // === 花瓣：纯 opacity 从 0→1 淡入，不动任何 transform ===
         // 
-        // 不用 scale（顶点在 Z=-28，origin 在 0，scale 会位移）
-        // 只用 opacity 淡入 + quaternion 旋转模拟花苞→绽放
+        // 因为花瓣 origin 在 (0,0,0) 而顶点在 Z=-28，
+        // 任何 scale/rotation 都会导致严重位移。
+        // 所以只用 opacity 淡入，生长感靠花瓣间的时序差体现：
+        //   huaban1 从 40% 开始显现
+        //   huaban4 从 43% 开始
+        //   ...逐片出现
+        //   到 95% 全部完全不透明
         //
-        // 阶段1 (localP 0~0.4): 花瓣淡入出现，保持闭合（花苞）
-        // 阶段2 (localP 0.4~1.0): 花瓣从闭合逐渐展开到初始姿态
+        // 淡入用较慢的渐变（不是突然出现），模拟花瓣从嫩到厚实
 
-        const appearP = Math.min(localP * 2.5, 1);  // 淡入
-        const bloomP = easeOutCubic(Math.max((localP - 0.35) / 0.65, 0)); // 展开
-
-        // 保持原始 scale 不变！
         mesh.scale.copy(initScale);
-        
-        // opacity：淡入
-        mat.opacity = easeOutCubic(appearP);
-
-        // 花苞闭合 → 绽放展开
-        // closeAmount: 1=完全闭合(花苞), 0=完全展开(初始姿态)
-        const closeAmount = 1.0 - bloomP;
-
         mesh.quaternion.copy(initQuat);
-        
-        // 闭合旋转：让花瓣向花蕊方向合拢
-        // 花瓣基部在 Z≈-24.5，尖端在 Z≈-33
-        // 闭合 = 花瓣尖端向上翘（绕 X 轴正向旋转）
-        // 同时略微向中心轴收拢（绕 Y 轴旋转）
-        if (closeAmount > 0.01) {
-          // 主闭合旋转（花瓣尖端向上合拢）
-          const closeAngle = closeAmount * 0.40;
-          const closeQ = new THREE.Quaternion().setFromAxisAngle(
-            new THREE.Vector3(1, 0, 0),
-            closeAngle
-          );
-          mesh.quaternion.multiply(closeQ);
-        }
+        mesh.position.copy(initPos);
 
-        // 花瓣微风颤动（绽放后）
-        if (bloomP > 0.3) {
-          const intensity = bloomP * 0.003;
+        // 缓慢淡入 (用 easeOutCubic 让前期更慢、后期加速到 1)
+        const fadeP = easeOutCubic(localP);
+        mat.opacity = fadeP;
+
+        // 微风颤动（显现到一定程度后）
+        if (fadeP > 0.5) {
+          const intensity = (fadeP - 0.5) * 2.0 * 0.002;
           const tr = Math.sin(t * 1.8 + (cfg.order || 0) * 1.2);
           mesh.rotateX(tr * intensity);
-          mesh.rotateZ(tr * 0.4 * intensity + windX * 0.001);
+          mesh.rotateZ(tr * 0.4 * intensity + windX * 0.0005);
         }
       }
 
