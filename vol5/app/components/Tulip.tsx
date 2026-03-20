@@ -61,14 +61,28 @@ function easeInOutCubic(t: number): number {
 }
 
 // 加载贴图
-function useColorTexture() {
+function useTextures() {
   const { gl } = useThree();
   return useMemo(() => {
-    const tex = new THREE.TextureLoader().load(`${BASE_PATH}/model/color.png`);
-    tex.flipY = false;
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = gl.capabilities.getMaxAnisotropy();
-    return tex;
+    const loader = new THREE.TextureLoader();
+    const maxAniso = gl.capabilities.getMaxAnisotropy();
+
+    const color = loader.load(`${BASE_PATH}/model/color.png`);
+    // GLB 内部贴图默认 flipY=false, 但外部 PNG 加载默认 flipY=true
+    // 需要跟原始 GLB 的 UV 匹配 — 试两种，如果不对就反转
+    color.flipY = false;
+    color.colorSpace = THREE.SRGBColorSpace;
+    color.anisotropy = maxAniso;
+    color.wrapS = THREE.RepeatWrapping;
+    color.wrapT = THREE.RepeatWrapping;
+
+    const roughness = loader.load(`${BASE_PATH}/model/roughness.png`);
+    roughness.flipY = false;
+    roughness.anisotropy = maxAniso;
+    roughness.wrapS = THREE.RepeatWrapping;
+    roughness.wrapT = THREE.RepeatWrapping;
+
+    return { color, roughness };
   }, [gl]);
 }
 
@@ -83,7 +97,7 @@ export default function Tulip() {
   }>>(new Map());
 
   const gltf = useGLTF(`${BASE_PATH}/model/tulip-split.glb`);
-  const colorTex = useColorTexture();
+  const textures = useTextures();
 
   // 自定义材质 — 带贴图 + SSS + Fresnel
   const flowerMat = useMemo(() => new THREE.ShaderMaterial({
@@ -144,14 +158,14 @@ export default function Tulip() {
       }
     `,
     uniforms: {
-      uColorMap: { value: colorTex },
+      uColorMap: { value: textures.color },
       uTime: { value: 0 },
       uOpacity: { value: 1.0 },
     },
     transparent: true,
     side: THREE.DoubleSide,
     depthWrite: true,
-  }), [colorTex]);
+  }), [textures]);
 
   // 初始化：遍历场景，给每个部件替换材质 + 记录初始变换
   const scene = useMemo(() => {
