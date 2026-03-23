@@ -55,6 +55,7 @@ jobs:
           mkdir -p deploy/dahlia-v3
           mkdir -p deploy/tulip
           mkdir -p deploy/tulip-v2
+          mkdir -p deploy/generative
           # VOL4 大丽花 → /dahlia
           cp -r vol4/out/* deploy/dahlia/
           # VOL3 大丽花 → /dahlia-v3
@@ -63,6 +64,13 @@ jobs:
           cp -r vol5/out/* deploy/tulip/
           # VOL6 郁金香代码版 → /tulip-v2
           cp -r vol6/out/* deploy/tulip-v2/
+          # VOL7 生成艺术引擎 → /generative (纯静态HTML+JS)
+          cp vol7-generative-engine/index.html deploy/generative/
+          cp vol7-generative-engine/engine.js deploy/generative/
+          cp vol7-generative-engine/fields.js deploy/generative/
+          cp vol7-generative-engine/camera.js deploy/generative/
+          cp vol7-generative-engine/io.js deploy/generative/
+          cp -r vol7-generative-engine/assets deploy/generative/assets
           # 根目录静态页面
           cp vol4/public/crystal-synthesis.html deploy/
           cp vol4/public/guofeng-synthesis.html deploy/

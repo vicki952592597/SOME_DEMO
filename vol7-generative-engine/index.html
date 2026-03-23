@@ -1,0 +1,94 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generative Art Engine — GPGPU Particle System</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Inter','SF Pro','Segoe UI',sans-serif;}
+  canvas#main{display:block;width:100vw;height:100vh;}
+  
+  /* Loading */
+  #loader{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;z-index:1000;transition:opacity 0.8s;}
+  #loader.done{opacity:0;pointer-events:none;}
+  #loader h1{color:#fff;font-size:1.2rem;font-weight:300;letter-spacing:0.3em;text-transform:uppercase;margin-bottom:1rem;}
+  #loader .bar{width:200px;height:2px;background:#222;border-radius:1px;overflow:hidden;}
+  #loader .bar-fill{width:0%;height:100%;background:linear-gradient(90deg,#4af,#f4a);transition:width 0.3s;}
+  
+  /* VJ Console */
+  #vj-console{
+    position:fixed;top:0;right:0;width:320px;height:100vh;
+    background:rgba(0,0,0,0.92);backdrop-filter:blur(20px);
+    border-left:1px solid rgba(255,255,255,0.06);
+    z-index:500;overflow-y:auto;display:block;
+    font-size:12px;color:#aaa;
+  }
+  .vj-header{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);
+    font-size:13px;font-weight:700;color:#fff;letter-spacing:0.15em;text-transform:uppercase;
+  }
+  .vj-header button{background:none;border:none;color:#666;cursor:pointer;font-size:16px;}
+  .vj-header button:hover{color:#fff;}
+  .vj-body{padding:12px 20px;}
+  .vj-section{margin-bottom:14px;}
+  .vj-section label{display:block;font-size:10px;font-weight:600;color:#666;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;}
+  .vj-section input[type=range]{width:100%;appearance:none;height:4px;background:#222;border-radius:2px;outline:none;}
+  .vj-section input[type=range]::-webkit-slider-thumb{appearance:none;width:14px;height:14px;border-radius:50%;background:#4af;cursor:pointer;border:2px solid #000;}
+  .vj-section select{width:100%;background:#111;border:1px solid #333;color:#ccc;padding:6px 8px;border-radius:4px;font-size:11px;}
+  .vj-section span{font-size:11px;color:#4af;font-family:monospace;float:right;margin-top:-18px;}
+  .vj-section button{background:#111;border:1px solid #333;color:#ccc;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;transition:all 0.2s;}
+  .vj-section button:hover{background:#222;color:#fff;border-color:#4af;}
+
+  /* HUD */
+  #hud{position:fixed;bottom:20px;left:20px;z-index:100;color:rgba(255,255,255,0.4);font-size:10px;font-family:monospace;line-height:1.6;}
+  #hud kbd{background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:3px;font-size:10px;}
+</style>
+</head>
+<body>
+<canvas id="main"></canvas>
+
+<div id="loader">
+  <h1>Loading Engine</h1>
+  <div class="bar"><div class="bar-fill" id="load-bar"></div></div>
+</div>
+
+<div id="hud">
+  <kbd>TAB</kbd> VJ Console &nbsp;
+  <kbd>C</kbd> Camera &nbsp;
+  <kbd>R</kbd> Reset &nbsp;
+  <kbd>0-9</kbd> Fields
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import { GenerativeEngine } from './engine.js';
+
+(async () => {
+  const bar = document.getElementById('load-bar');
+  bar.style.width = '20%';
+
+  const canvas = document.getElementById('main');
+  const engine = new GenerativeEngine(canvas);
+
+  bar.style.width = '50%';
+
+  // Load tulip GLB as point cloud source
+  await engine.init('./assets/tulip-split.glb');
+
+  bar.style.width = '100%';
+  setTimeout(() => document.getElementById('loader').classList.add('done'), 400);
+})();
+</script>
+</body>
+</html>
