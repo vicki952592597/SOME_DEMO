@@ -256,13 +256,22 @@ export class GenerativeEngine {
     this._simScene = new THREE.Scene();
     this._simCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
-    // Particle render
+    // Particle render — create aRef attribute for texture lookup
     const geo = new THREE.BufferGeometry();
-    const dummy = new Float32Array(this.particleCount * 3);
-    geo.setAttribute('position', new THREE.BufferAttribute(dummy, 3));
+    const refs = new Float32Array(this.particleCount * 2);
+    const positions = new Float32Array(this.particleCount * 3);
+    for (let i = 0; i < this.particleCount; i++) {
+      const x = i % W;
+      const y = Math.floor(i / W);
+      refs[i * 2]     = (x + 0.5) / W;
+      refs[i * 2 + 1] = (y + 0.5) / H;
+      positions[i * 3] = positions[i * 3 + 1] = positions[i * 3 + 2] = 0;
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('aRef', new THREE.BufferAttribute(refs, 2));
 
     this._particleMat = new THREE.ShaderMaterial({
-      vertexShader: shaderReplace(PARTICLE_VERT),
+      vertexShader: PARTICLE_VERT,
       fragmentShader: PARTICLE_FRAG,
       transparent: true,
       blending: THREE.AdditiveBlending,

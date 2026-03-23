@@ -76,18 +76,27 @@ import { GenerativeEngine } from './engine.js';
 
 (async () => {
   const bar = document.getElementById('load-bar');
-  bar.style.width = '20%';
+  const loaderH1 = document.querySelector('#loader h1');
+  try {
+    bar.style.width = '20%';
 
-  const canvas = document.getElementById('main');
-  const engine = new GenerativeEngine(canvas);
+    const canvas = document.getElementById('main');
+    const engine = new GenerativeEngine(canvas);
 
-  bar.style.width = '50%';
+    bar.style.width = '50%';
+    loaderH1.textContent = 'Loading Model...';
 
-  // Load tulip GLB as point cloud source
-  await engine.init('./assets/tulip-split.glb');
+    // Load tulip GLB as point cloud source
+    await engine.init('./assets/tulip-split.glb');
 
-  bar.style.width = '100%';
-  setTimeout(() => document.getElementById('loader').classList.add('done'), 400);
+    bar.style.width = '100%';
+    setTimeout(() => document.getElementById('loader').classList.add('done'), 400);
+  } catch(e) {
+    console.error('[INIT ERROR]', e);
+    loaderH1.textContent = 'Error: ' + e.message;
+    loaderH1.style.color = '#f44';
+    loaderH1.style.fontSize = '0.9rem';
+  }
 })();
 </script>
 </body>

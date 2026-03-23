@@ -372,6 +372,8 @@ vec3 fieldForce(vec3 pos, vec3 vel, int fieldId, float time, vec4 params){
 
 // ============ Simulation Shader (position update) ============
 export const SIM_FRAG_SHADER = /* glsl */`
+${GLSL_COMMON}
+
 uniform sampler2D uPosTex;
 uniform sampler2D uVelTex;
 uniform sampler2D uOriginTex;
@@ -383,7 +385,6 @@ uniform float uProgress;
 
 varying vec2 vUv;
 
-${GLSL_COMMON}
 ${FIELD_FUNCTIONS}
 
 void main(){
@@ -421,6 +422,8 @@ void main(){
 
 // Velocity update shader
 export const VEL_FRAG_SHADER = /* glsl */`
+${GLSL_COMMON}
+
 uniform sampler2D uPosTex;
 uniform sampler2D uVelTex;
 uniform sampler2D uOriginTex;
@@ -432,7 +435,6 @@ uniform float uProgress;
 
 varying vec2 vUv;
 
-${GLSL_COMMON}
 ${FIELD_FUNCTIONS}
 
 void main(){
@@ -483,17 +485,15 @@ uniform sampler2D uVelTex;
 uniform float uPointSize;
 uniform float uTime;
 
+attribute vec2 aRef;
+
 varying vec3 vColor;
 varying float vLife;
 varying float vSpeed;
 
 void main(){
-  vec2 ref = vec2(
-    mod(float(gl_VertexID), {WIDTH}.0) / {WIDTH}.0,
-    floor(float(gl_VertexID) / {WIDTH}.0) / {HEIGHT}.0
-  );
-  vec4 posData = texture2D(uPosTex, ref);
-  vec4 velData = texture2D(uVelTex, ref);
+  vec4 posData = texture2D(uPosTex, aRef);
+  vec4 velData = texture2D(uVelTex, aRef);
 
   vec3 pos = posData.xyz;
   float life = posData.w;
@@ -512,13 +512,14 @@ void main(){
 
   vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
   gl_Position = projectionMatrix * mvPos;
-  gl_PointSize = uPointSize * (1.0 + speed*0.5) / -mvPos.z;
+  gl_PointSize = uPointSize * (1.0 + speed * 0.5) / max(-mvPos.z, 0.1);
   gl_PointSize = clamp(gl_PointSize, 1.0, 64.0);
 }
 `;
 
 // Particle render fragment shader
 export const PARTICLE_FRAG = /* glsl */`
+precision highp float;
 varying vec3 vColor;
 varying float vLife;
 varying float vSpeed;
