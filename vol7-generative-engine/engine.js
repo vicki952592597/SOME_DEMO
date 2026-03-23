@@ -134,6 +134,12 @@ export class GenerativeEngine {
 
     this._time = 0;
     this._running = false;
+
+    // Auto-cycle state machine
+    this._cycleTime = 0;
+    this._cyclePhase = 'scatter'; // scatter | converge | hold | release
+    this._cycleDurations = { scatter: 6, converge: 4, hold: 3, release: 1.5 };
+    this._autoFieldSwitch = true;
   }
 
   _initRenderer() {
@@ -200,11 +206,15 @@ export class GenerativeEngine {
     this._copyToRT(posTex, this.posRT[1]);
     this._copyToRT(velTex, this.velRT[0]);
     this._copyToRT(velTex, this.velRT[1]);
+    this._copyToRT(posTex, this._originRT); // Origin = initial shape
 
     // Simulation materials
     const shaderReplace = (src) => src
       .replace(/\{WIDTH\}/g, W.toString())
       .replace(/\{HEIGHT\}/g, H.toString());
+
+    // Origin texture (persistent, stores the target model shape)
+    this._originRT = makeRT();
 
     this._simQuad = new THREE.Mesh(
       new THREE.PlaneGeometry(2, 2),
@@ -214,6 +224,7 @@ export class GenerativeEngine {
         uniforms: {
           uPosTex: { value: null },
           uVelTex: { value: null },
+          uOriginTex: { value: null },
           uTime: { value: 0 },
           uDelta: { value: 0.016 },
           uFieldId: { value: 1 },
@@ -231,10 +242,12 @@ export class GenerativeEngine {
         uniforms: {
           uPosTex: { value: null },
           uVelTex: { value: null },
+          uOriginTex: { value: null },
           uTime: { value: 0 },
           uDelta: { value: 0.016 },
           uFieldId: { value: 1 },
           uFieldParams: { value: new THREE.Vector4(1, 1, 0.98, 1) },
+          uProgress: { value: 0 },
         },
       })
     );
@@ -365,6 +378,7 @@ export class GenerativeEngine {
     this._copyToRT(posTex, this.posRT[1]);
     this._copyToRT(velTex, this.velRT[0]);
     this._copyToRT(velTex, this.velRT[1]);
+    this._copyToRT(posTex, this._originRT); // Origin = target model shape
 
     // Frustum fit
     const sphere = new THREE.Sphere(new THREE.Vector3(), 1.2);
@@ -384,10 +398,12 @@ export class GenerativeEngine {
     // Update velocity
     this._velQuad.material.uniforms.uPosTex.value = this.posRT[readIdx].texture;
     this._velQuad.material.uniforms.uVelTex.value = this.velRT[readIdx].texture;
+    this._velQuad.material.uniforms.uOriginTex.value = this._originRT.texture;
     this._velQuad.material.uniforms.uTime.value = this._time;
     this._velQuad.material.uniforms.uDelta.value = dt;
     this._velQuad.material.uniforms.uFieldId.value = p.fieldId;
     this._velQuad.material.uniforms.uFieldParams.value = fieldParams;
+    this._velQuad.material.uniforms.uProgress.value = p.progress;
 
     this._simScene.add(this._velQuad);
     this.renderer.setRenderTarget(this.velRT[writeIdx]);
@@ -397,6 +413,7 @@ export class GenerativeEngine {
     // Update position
     this._simQuad.material.uniforms.uPosTex.value = this.posRT[readIdx].texture;
     this._simQuad.material.uniforms.uVelTex.value = this.velRT[writeIdx].texture;
+    this._simQuad.material.uniforms.uOriginTex.value = this._originRT.texture;
     this._simQuad.material.uniforms.uTime.value = this._time;
     this._simQuad.material.uniforms.uDelta.value = dt;
     this._simQuad.material.uniforms.uFieldId.value = p.fieldId;
@@ -471,17 +488,48 @@ export class GenerativeEngine {
       // Bezier update
       this.bezier.evaluate('bloom', dt);
 
+      // Auto-cycle state machine
+      this._cycleTime += dt;
+      const dur = this._cycleDurations[this._cyclePhase];
+      const phaseT = Math.min(this._cycleTime / dur, 1);
+
+      if (this._cyclePhase === 'scatter') {
+        this.params.progress = 0;
+        if (phaseT >= 1) { this._cyclePhase = 'converge'; this._cycleTime = 0; }
+      } else if (this._cyclePhase === 'converge') {
+        // Smooth ease-in-out from 0 to 1
+        const t = phaseT;
+        this.params.progress = t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
+        if (phaseT >= 1) { this._cyclePhase = 'hold'; this._cycleTime = 0; this.params.progress = 1; }
+      } else if (this._cyclePhase === 'hold') {
+        this.params.progress = 1;
+        if (phaseT >= 1) { this._cyclePhase = 'release'; this._cycleTime = 0; }
+      } else if (this._cyclePhase === 'release') {
+        const t = phaseT;
+        this.params.progress = 1 - (t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2);
+        if (phaseT >= 1) {
+          this._cyclePhase = 'scatter'; this._cycleTime = 0; this.params.progress = 0;
+          // Switch to a random field on each new scatter
+          if (this._autoFieldSwitch) {
+            const newField = Math.floor(Math.random() * 30);
+            this.params.fieldId = newField;
+            const sel = document.getElementById('vj-field');
+            if (sel) sel.value = newField;
+          }
+        }
+      }
+
+      // Hand tracking override
+      if (this.handTracker?.active) {
+        this.params.progress = this.handTracker.pinchValue;
+        this.vjConsole.updatePinch(this.handTracker.pinchValue);
+      }
+
       // GPGPU
       this._gpgpuStep(dt);
 
       // Camera
       this.cinematography.update(dt);
-
-      // Hand tracking → progress
-      if (this.handTracker?.active) {
-        this.params.progress = this.handTracker.pinchValue;
-        this.vjConsole.updatePinch(this.handTracker.pinchValue);
-      }
 
       // Render with post-processing
       this.composer.render(dt);

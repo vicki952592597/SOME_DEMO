@@ -374,6 +374,7 @@ vec3 fieldForce(vec3 pos, vec3 vel, int fieldId, float time, vec4 params){
 export const SIM_FRAG_SHADER = /* glsl */`
 uniform sampler2D uPosTex;
 uniform sampler2D uVelTex;
+uniform sampler2D uOriginTex;
 uniform float uTime;
 uniform float uDelta;
 uniform int uFieldId;
@@ -388,8 +389,10 @@ ${FIELD_FUNCTIONS}
 void main(){
   vec4 posData = texture2D(uPosTex, vUv);
   vec4 velData = texture2D(uVelTex, vUv);
+  vec4 originData = texture2D(uOriginTex, vUv);
   vec3 pos = posData.xyz;
   vec3 vel = velData.xyz;
+  vec3 origin = originData.xyz;
   float life = posData.w;
 
   // 矢量场力
@@ -397,10 +400,20 @@ void main(){
 
   // 阻尼积分 (Semi-implicit Euler)
   vel += force * uDelta;
-  pos += vel * uDelta;
+  vec3 fieldPos = pos + vel * uDelta;
+
+  // 形态回归: uProgress=0 纯矢量场, uProgress=1 完全回到原始形态
+  // 使用弹性回弹力将粒子拉回原始位置
+  float returnStrength = uProgress * uProgress * 8.0; // 二次曲线加速
+  vec3 returnForce = (origin - fieldPos) * returnStrength;
+  fieldPos += returnForce * uDelta;
+
+  // 当 progress 接近1时，直接snap到原始位置
+  float snap = smoothstep(0.85, 1.0, uProgress);
+  pos = mix(fieldPos, origin, snap);
 
   // 生命周期
-  life -= uDelta * 0.05;
+  life = mix(life - uDelta * 0.05, 1.0, uProgress);
 
   gl_FragColor = vec4(pos, life);
 }
@@ -410,10 +423,12 @@ void main(){
 export const VEL_FRAG_SHADER = /* glsl */`
 uniform sampler2D uPosTex;
 uniform sampler2D uVelTex;
+uniform sampler2D uOriginTex;
 uniform float uTime;
 uniform float uDelta;
 uniform int uFieldId;
 uniform vec4 uFieldParams;
+uniform float uProgress;
 
 varying vec2 vUv;
 
@@ -423,14 +438,28 @@ ${FIELD_FUNCTIONS}
 void main(){
   vec4 posData = texture2D(uPosTex, vUv);
   vec4 velData = texture2D(uVelTex, vUv);
+  vec4 originData = texture2D(uOriginTex, vUv);
   vec3 pos = posData.xyz;
   vec3 vel = velData.xyz;
+  vec3 origin = originData.xyz;
 
   vec3 force = fieldForce(pos, vel, uFieldId, uTime, uFieldParams);
-  vel += force * uDelta;
+
+  // 形态回归时，减弱矢量场力，增加回归阻尼
+  float fieldMix = 1.0 - uProgress * uProgress;
+  vel += force * uDelta * fieldMix;
+
+  // 回归力：指向原始位置的弹性力
+  vec3 toOrigin = origin - pos;
+  float returnStr = uProgress * uProgress * 6.0;
+  vel += toOrigin * returnStr * uDelta;
+
+  // 回归时增加阻尼，让粒子平稳停靠
+  float dampBoost = 1.0 + uProgress * 3.0;
+  vel *= max(0.0, 1.0 - uDelta * dampBoost);
 
   // 速度限制
-  float maxSpeed = 5.0;
+  float maxSpeed = mix(5.0, 2.0, uProgress);
   float speed = length(vel);
   if(speed > maxSpeed) vel *= maxSpeed / speed;
 
