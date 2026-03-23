@@ -105,7 +105,7 @@ export class GenerativeEngine {
       decay: 0.98,
       custom: 1.0,
       pointSize: 2.0,
-      bloomStrength: 1.5,
+      bloomStrength: 0.3,
       bloomRadius: 0.4,
       bloomThreshold: 0.2,
       afterimageDamp: 0.92,
@@ -136,8 +136,9 @@ export class GenerativeEngine {
     this._running = false;
 
     // Auto-cycle state machine
+    // Start with 'hold' so the tulip model is visible first, then scatter
     this._cycleTime = 0;
-    this._cyclePhase = 'scatter'; // scatter | converge | hold | release
+    this._cyclePhase = 'hold';
     this._cycleDurations = { scatter: 6, converge: 4, hold: 3, release: 1.5 };
     this._autoFieldSwitch = true;
   }
@@ -279,7 +280,17 @@ export class GenerativeEngine {
   }
 
   _copyToRT(texture, rt) {
-    const mat = new THREE.MeshBasicMaterial({ map: texture });
+    // Use a raw shader to preserve float precision (MeshBasicMaterial clamps to [0,1])
+    const mat = new THREE.ShaderMaterial({
+      vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position,1.0); }`,
+      fragmentShader: `
+        precision highp float;
+        uniform sampler2D tSrc;
+        varying vec2 vUv;
+        void main(){ gl_FragColor = texture2D(tSrc, vUv); }
+      `,
+      uniforms: { tSrc: { value: texture } },
+    });
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
     const scene = new THREE.Scene();
     scene.add(mesh);

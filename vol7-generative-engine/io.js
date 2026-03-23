@@ -209,8 +209,8 @@ export class VJConsole {
         </div>
         <div class="vj-section">
           <label>🌸 Bloom</label>
-          <input type="range" id="vj-bloom" min="0" max="5" step="0.1" value="1.5">
-          <span id="vj-bloom-val">1.5</span>
+          <input type="range" id="vj-bloom" min="0" max="5" step="0.1" value="0.3">
+          <span id="vj-bloom-val">0.3</span>
         </div>
         <div class="vj-section">
           <label>👁️ Afterimage</label>
