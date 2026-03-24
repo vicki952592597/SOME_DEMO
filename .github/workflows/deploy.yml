@@ -82,6 +82,7 @@ jobs:
           cp 492x656.jpg deploy/
           cp 492x656APNG.png deploy/
           cp BG_198-720.png deploy/
+          cp card-cloth.html deploy/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
