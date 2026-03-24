@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>卡牌等级全息展示 · SSR / SR / R / N</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --card-aspect: 0.718;
+    --card-radius: 4.55% / 3.5%;
+    --pointer-x: 50%;
+    --pointer-y: 50%;
+    --pointer-from-center: 0;
+    --pointer-from-top: 0.5;
+    --pointer-from-left: 0.5;
+    --card-opacity: 0;
+    --rotate-x: 0deg;
+    --rotate-y: 0deg;
+    --background-x: 50%;
+    --background-y: 50%;
+    /* 彩虹色谱 */
+    --red: hsl(2, 100%, 73%);
+    --yellow: hsl(53, 100%, 69%);
+    --green: hsl(93, 100%, 69%);
+    --cyan: hsl(176, 100%, 76%);
+    --blue: hsl(228, 100%, 74%);
+    --violet: hsl(283, 100%, 73%);
+    /* 闪光纹理 */
+    --glitter: url('https://raw.githubusercontent.com/vicki952592597/Vfx-library--/main/effects/assets/glitter.png');
+    --glittersize: 12%;
+}
+
+body {
+    min-height: 100vh;
+    background: #060609;
+    background-image:
+        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(88, 40, 120, 0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(30, 60, 120, 0.08) 0%, transparent 50%);
+    padding: 50px 20px 80px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Noto Sans SC', sans-serif;
+    overflow-x: hidden;
+    color: #fff;
+}
+
+/* ===== 页面标题 ===== */
+.page-header {
+    text-align: center;
+    margin-bottom: 60px;
+}
+.page-header h1 {
+    font-size: 22px;
+    font-weight: 300;
+    letter-spacing: 8px;
+    color: rgba(255,255,255,0.85);
+    text-transform: uppercase;
+}
+.page-header h1 span {
+    font-weight: 600;
+    background: linear-gradient(135deg, #e8d5b7 0%, #f5e6d0 40%, #d4a574 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.page-header .subtitle {
+    color: rgba(255,255,255,0.22);
+    font-size: 11px;
+    margin-top: 12px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+}
+.page-header .divider {
+    width: 60px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    margin: 16px auto 0;
+}
+
+/* ===== 卡牌网格 ===== */
+.cards-grid {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    flex-wrap: wrap;
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+/* ===== 单个卡牌区域 ===== */
+.card-demo {
+    text-align: center;
+    position: relative;
+}
+
+/* ===== 精致手机外框 ===== */
+.phone-frame {
+    --frame-w: 300px;
+    --frame-ratio: calc(1624 / 750);
+    position: relative;
+    width: var(--frame-w);
+    height: calc(var(--frame-w) * var(--frame-ratio));
+    border-radius: 40px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    /* 多层外框模拟真实手机质感 */
+    border: 1.5px solid rgba(255,255,255,0.06);
+    outline: 1px solid rgba(0,0,0,0.6);
+    box-shadow:
+        /* 外部投影 - 深度感 */
+        0 30px 80px -10px rgba(0,0,0,0.7),
+        0 15px 40px -5px rgba(0,0,0,0.5),
+        /* 金属边框光泽 */
+        inset 0 0.5px 0 rgba(255,255,255,0.12),
+        inset 0 -0.5px 0 rgba(255,255,255,0.03),
+        inset 0.5px 0 0 rgba(255,255,255,0.06),
+        inset -0.5px 0 0 rgba(255,255,255,0.06),
+        /* 外圈微光 */
+        0 0 0 0.5px rgba(255,255,255,0.04);
+}
+
+/* 手机屏幕背景 */
+.phone-screen {
+    position: absolute;
+    inset: 0;
+    border-radius: 40px;
+    background: url('./BG_198-720.png') center/cover no-repeat;
+    z-index: 0;
+}
+
+/* 灵动岛 */
+.phone-frame::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90px;
+    height: 26px;
+    background: #000;
+    border-radius: 20px;
+    z-index: 20;
+    box-shadow:
+        inset 0 0 4px rgba(0,0,0,0.8),
+        0 0.5px 0 rgba(255,255,255,0.04);
+}
+
+/* 灵动岛摄像头 */
+.phone-frame::after {
+    content: '';
+    position: absolute;
+    top: 18px;
+    left: calc(50% + 22px);
+    width: 10px;
+    height: 10px;
+    background: radial-gradient(circle, #1a1a3e 30%, #0a0a1e 60%, #000 100%);
+    border-radius: 50%;
+    z-index: 21;
+    box-shadow:
+        inset 0 0 2px rgba(50, 50, 150, 0.3),
+        0 0 1px rgba(0,0,0,0.8);
+}
+
+/* 底部横线指示器 */
+.phone-home-bar {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 4px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 2px;
+    z-index: 20;
+}
+
+/* ===== 等级徽章 ===== */
+.grade-badge {
+    position: absolute;
+    top: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 4px;
+    padding: 4px 20px;
+    border-radius: 20px;
+    z-index: 10;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.grade-ssr .grade-badge {
+    background: linear-gradient(135deg, rgba(255,200,50,0.12), rgba(255,120,50,0.08));
+    color: rgba(255,215,140,0.9);
+    border: 1px solid rgba(255,200,80,0.2);
+    box-shadow: 0 0 20px rgba(255,180,50,0.1), inset 0 0 12px rgba(255,200,80,0.05);
+}
+.grade-sr .grade-badge {
+    background: linear-gradient(135deg, rgba(180,130,255,0.1), rgba(230,70,160,0.06));
+    color: rgba(200,170,255,0.85);
+    border: 1px solid rgba(180,130,255,0.18);
+    box-shadow: 0 0 16px rgba(180,130,255,0.08);
+}
+.grade-r .grade-badge {
+    background: rgba(100,170,255,0.06);
+    color: rgba(140,185,255,0.75);
+    border: 1px solid rgba(100,170,255,0.12);
+}
+.grade-n .grade-badge {
+    background: rgba(255,255,255,0.03);
+    color: rgba(255,255,255,0.35);
+    border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ===== 等级描述 ===== */
+.grade-desc {
+    color: rgba(255,255,255,0.2);
+    font-size: 10px;
+    margin-top: 18px;
+    letter-spacing: 1px;
+    line-height: 1.6;
+    font-weight: 300;
+}
+.grade-desc strong {
+    color: rgba(255,255,255,0.4);
+    font-weight: 500;
+}
+
+/* ========== 核心卡牌结构 ========== */
+.card {
+    width: 220px;
+    aspect-ratio: var(--card-aspect);
+    position: relative;
+    border-radius: var(--card-radius);
+    transform-style: preserve-3d;
+    transform: perspective(600px) rotateY(var(--rotate-x)) rotateX(var(--rotate-y));
+    transition: transform 0.15s ease-out;
+    cursor: pointer;
+    will-change: transform;
+    outline: 1px solid transparent;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+}
+
+.card > .card__front {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--card-radius);
+    overflow: hidden;
+    z-index: 0;
+    backface-visibility: hidden;
+}
+
+.card > .card__front > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.card > .card__shine {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--card-radius);
+    overflow: hidden;
+    z-index: 2;
+    opacity: var(--card-opacity);
+    mix-blend-mode: color-dodge;
+    pointer-events: none;
+    -webkit-mask-image: var(--card-mask);
+    mask-image: var(--card-mask);
+    -webkit-mask-size: cover;
+    mask-size: cover;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+}
+
+.card > .card__shine::before,
+.card > .card__shine::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: var(--card-radius);
+}
+
+.card > .card__glare {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--card-radius);
+    overflow: hidden;
+    z-index: 3;
+    opacity: var(--card-opacity);
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    -webkit-mask-image: var(--card-mask);
+    mask-image: var(--card-mask);
+    -webkit-mask-size: cover;
+    mask-size: cover;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+}
+
+/* ===== 卡牌悬浮光晕 ===== */
+.card:hover,
+.card.active {
+    box-shadow:
+        0 0 3px -1px white,
+        0 0 3px 1px hsl(47, 100%, 78%),
+        0 0 12px 2px var(--glow-color, hsl(175, 100%, 90%)),
+        0px 10px 20px -5px black;
+}
+
+/* ==================================================
+   SSR 等级 - 终极全息：宇宙星辰 + 金色闪光 + 多层幻彩
+   与 SR 完全不同的视觉语言
+   ================================================== */
+.card.grade-ssr {
+    --glow-color: hsl(45, 100%, 65%);
+    --space: 4%;
+}
+.card.grade-ssr .card__shine {
+    /* 宇宙纹理底 + 彩虹色谱 + 聚光 —— 三层叠加 */
+    background-image:
+        var(--glitter),
+        var(--glitter),
+        url('https://raw.githubusercontent.com/vicki952592597/Vfx-library--/main/effects/assets/cosmos-bottom.png'),
+        repeating-linear-gradient(82deg,
+            hsl(53, 65%, 60%) calc(var(--space)*1), hsl(93, 56%, 50%) calc(var(--space)*2),
+            hsl(176, 54%, 49%) calc(var(--space)*3), hsl(228, 59%, 55%) calc(var(--space)*4),
+            hsl(283, 60%, 55%) calc(var(--space)*5), hsl(326, 59%, 51%) calc(var(--space)*6),
+            hsl(326, 59%, 51%) calc(var(--space)*7), hsl(283, 60%, 55%) calc(var(--space)*8),
+            hsl(228, 59%, 55%) calc(var(--space)*9), hsl(176, 54%, 49%) calc(var(--space)*10),
+            hsl(93, 56%, 50%) calc(var(--space)*11), hsl(53, 65%, 60%) calc(var(--space)*12)
+        ),
+        radial-gradient(farthest-corner circle at var(--pointer-x) var(--pointer-y),
+            hsla(180, 100%, 89%, 0.5) 5%, hsla(180, 14%, 57%, 0.3) 40%, hsl(0, 0%, 0%) 130%
+        );
+    background-blend-mode: soft-light, hard-light, color-burn, multiply;
+    background-position:
+        45% 45%, 55% 55%,
+        center center,
+        calc(10% + (var(--pointer-from-left) * 80%)) calc(10% + (var(--pointer-from-top) * 80%)),
+        center center;
+    background-size:
+        var(--glittersize) var(--glittersize),
+        var(--glittersize) var(--glittersize),
+        56%,
+        224% 504%,
+        56%;
+    filter: brightness(1) contrast(1) saturate(0.9);
+    mix-blend-mode: color-dodge;
+}
+.card.grade-ssr .card__shine::before {
+    /* 中层宇宙纹理 + 幻彩纹理叠加 */
+    background-image:
+        url('https://raw.githubusercontent.com/vicki952592597/Vfx-library--/main/effects/assets/cosmos-middle-trans.png'),
+        url('https://raw.githubusercontent.com/vicki952592597/Vfx-library--/main/effects/assets/illusion.png'),
+        repeating-linear-gradient(82deg,
+            hsl(53, 65%, 60%) calc(var(--space)*1), hsl(93, 56%, 50%) calc(var(--space)*2),
+            hsl(176, 54%, 49%) calc(var(--space)*3), hsl(228, 59%, 55%) calc(var(--space)*4),
+            hsl(283, 60%, 55%) calc(var(--space)*5), hsl(326, 59%, 51%) calc(var(--space)*6),
+            hsl(326, 59%, 51%) calc(var(--space)*7), hsl(283, 60%, 55%) calc(var(--space)*8),
+            hsl(228, 59%, 55%) calc(var(--space)*9), hsl(176, 54%, 49%) calc(var(--space)*10),
+            hsl(93, 56%, 50%) calc(var(--space)*11), hsl(53, 65%, 60%) calc(var(--space)*12)
+        );
+    background-blend-mode: lighten, color-burn, multiply;
+    background-position:
+        center center,
+        center center,
+        calc(15% + (var(--pointer-from-left) * 70%)) calc(15% + (var(--pointer-from-top) * 70%));
+    background-size: 56%, 23%, 224% 504%;
+    filter: brightness(1.25) contrast(1.75) saturate(0.8);
+    mix-blend-mode: overlay;
+}
+.card.grade-ssr .card__shine::after {
+    /* 顶层宇宙纹理 + 色谱暗化 */
+    background-image:
+        url('https://raw.githubusercontent.com/vicki952592597/Vfx-library--/main/effects/assets/cosmos-top-trans.png'),
+        repeating-linear-gradient(82deg,
+            hsl(53, 65%, 60%) calc(var(--space)*1), hsl(93, 56%, 50%) calc(var(--space)*2),
+            hsl(176, 54%, 49%) calc(var(--space)*3), hsl(228, 59%, 55%) calc(var(--space)*4),
+            hsl(283, 60%, 55%) calc(var(--space)*5), hsl(326, 59%, 51%) calc(var(--space)*6),
+            hsl(326, 59%, 51%) calc(var(--space)*7), hsl(283, 60%, 55%) calc(var(--space)*8),
+            hsl(228, 59%, 55%) calc(var(--space)*9), hsl(176, 54%, 49%) calc(var(--space)*10),
+            hsl(93, 56%, 50%) calc(var(--space)*11), hsl(53, 65%, 60%) calc(var(--space)*12)
+        );
+    background-blend-mode: multiply, multiply;
+    background-position:
+        center center,
+        calc(20% + (var(--pointer-from-left) * 60%)) calc(20% + (var(--pointer-from-top) * 60%));
+    background-size: 56%, 224% 504%;
+    filter: brightness(1.25) contrast(1.75) saturate(0.8);
+    mix-blend-mode: multiply;
+}
+.card.grade-ssr .card__glare {
+    /* 高亮聚光 - 更强的光晕感 */
+    background-image: radial-gradient(farthest-corner circle at var(--pointer-x) var(--pointer-y),
+        hsla(204, 100%, 95%, 0.85) 5%, hsla(250, 15%, 20%, 1) 150%
+    );
+    filter: brightness(0.75) contrast(2) saturate(2);
+    mix-blend-mode: overlay;
+}
+
+
+/* ==================================================
+   SR 等级 - 高级全息：经典彩虹扫描线 + 闪光
+   ================================================== */
+.card.grade-sr {
+    --glow-color: hsl(280, 80%, 75%);
+}
+.card.grade-sr .card__shine {
+    background-image:
+        var(--glitter),
+        repeating-linear-gradient(110deg,
+            var(--violet), var(--blue), var(--green), var(--yellow), var(--red),
+            var(--violet), var(--blue), var(--green), var(--yellow), var(--red),
+            var(--violet), var(--blue), var(--green), var(--yellow), var(--red)
+        ),
+        repeating-linear-gradient(90deg, black 0px, black 2px, #666 2px, #666 4px);
+    background-position:
+        center center,
+        calc(((50% - var(--background-x)) * 2.6) + 50%) calc(((50% - var(--background-y)) * 3.5) + 50%),
+        center center;
+    background-size: var(--glittersize) var(--glittersize), 400% 400%, cover;
+    background-blend-mode: soft-light, overlay;
+    filter: brightness(1.0) contrast(1.2) saturate(1.1);
+    mix-blend-mode: color-dodge;
+}
+.card.grade-sr .card__shine::before {
+    background-image:
+        repeating-linear-gradient(90deg, black 6%, #777 9%, black 10.5%, #777 12%, black 15%, black 42%),
+        repeating-linear-gradient(90deg, black 6%, #777 9%, black 10.5%, #777 12%, black 15%, black 30%);
+    background-position:
+        calc((((50% - var(--background-x)) * 1.65) + 50%) + (var(--background-y) * 0.5)) var(--background-x),
+        calc((((50% - var(--background-x)) * -0.9) + 50%) - (var(--background-y) * 0.75)) var(--background-y);
+    background-size: 200% 200%, 200% 200%;
+    background-blend-mode: screen;
+    filter: brightness(1.15) contrast(1.1);
+    mix-blend-mode: hard-light;
+}
+.card.grade-sr .card__shine::after {
+    background-image: radial-gradient(
+        farthest-corner circle at var(--pointer-x) var(--pointer-y),
+        hsla(0, 0%, 90%, 0.8) 0%, hsla(0, 0%, 78%, 0.1) 25%, hsl(0, 0%, 0%) 90%
+    );
+    mix-blend-mode: luminosity;
+    filter: brightness(0.6) contrast(4);
+}
+.card.grade-sr .card__glare {
+    background-image: radial-gradient(
+        farthest-corner circle at var(--pointer-x) var(--pointer-y),
+        hsla(0, 0%, 100%, 0.7) 10%,
+        hsla(0, 0%, 100%, 0.4) 25%,
+        hsla(0, 0%, 0%, 0.6) 90%
+    );
+    filter: brightness(0.8) contrast(1.5);
+}
+
+/* ==================================================
+   R 等级 - 中级：简洁单色渐变全息，无闪光纹理
+   ================================================== */
+.card.grade-r {
+    --glow-color: hsl(210, 60%, 65%);
+}
+.card.grade-r .card__shine {
+    background-image:
+        repeating-linear-gradient(110deg,
+            hsl(210, 50%, 55%), hsl(240, 40%, 60%), hsl(200, 55%, 65%),
+            hsl(190, 50%, 60%), hsl(220, 45%, 55%),
+            hsl(210, 50%, 55%), hsl(240, 40%, 60%), hsl(200, 55%, 65%)
+        ),
+        repeating-linear-gradient(90deg, black 0px, black 3px, #555 3px, #555 5px);
+    background-position:
+        calc(((50% - var(--background-x)) * 2) + 50%) calc(((50% - var(--background-y)) * 2.5) + 50%),
+        center center;
+    background-size: 300% 300%, cover;
+    background-blend-mode: overlay;
+    filter: brightness(0.7) contrast(1.0) saturate(0.7);
+    mix-blend-mode: color-dodge;
+}
+.card.grade-r .card__shine::after {
+    background-image: radial-gradient(
+        farthest-corner circle at var(--pointer-x) var(--pointer-y),
+        hsla(210, 20%, 85%, 0.6) 0%, hsla(0, 0%, 50%, 0.1) 35%, hsl(0, 0%, 0%) 90%
+    );
+    mix-blend-mode: luminosity;
+    filter: brightness(0.65) contrast(3);
+}
+.card.grade-r .card__glare {
+    background-image: radial-gradient(
+        farthest-corner circle at var(--pointer-x) var(--pointer-y),
+        hsla(0, 0%, 100%, 0.45) 10%,
+        hsla(0, 0%, 100%, 0.2) 30%,
+        hsla(0, 0%, 0%, 0.5) 90%
+    );
+    filter: brightness(0.75) contrast(1.2);
+}
+
+/* ==================================================
+   N 等级 - 基础：极淡的银色光泽，几乎无全息
+   ================================================== */
+.card.grade-n {
+    --glow-color: hsl(0, 0%, 55%);
+}
+.card.grade-n .card__shine {
+    background-image:
+        radial-gradient(
+            farthest-corner circle at var(--pointer-x) var(--pointer-y),
+            hsla(0, 0%, 80%, 0.35) 0%,
+            hsla(0, 0%, 50%, 0.1) 40%,
+            hsla(0, 0%, 0%, 0.8) 100%
+        );
+    filter: brightness(0.5) contrast(0.8) saturate(0);
+    mix-blend-mode: color-dodge;
+}
+.card.grade-n .card__glare {
+    background-image: radial-gradient(
+        farthest-corner circle at var(--pointer-x) var(--pointer-y),
+        hsla(0, 0%, 100%, 0.2) 10%,
+        hsla(0, 0%, 100%, 0.05) 40%,
+        hsla(0, 0%, 0%, 0.3) 90%
+    );
+    filter: brightness(0.6) contrast(1);
+    mix-blend-mode: overlay;
+}
+
+/* N 卡无额外特效，只有基础鼠标跟随光点 */
+.card.grade-n:hover,
+.card.grade-n.active {
+    box-shadow:
+        0 0 2px rgba(255,255,255,0.15),
+        0px 8px 20px -5px black;
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 1400px) {
+    .phone-frame { --frame-w: 260px; }
+    .card { width: 195px; }
+}
+@media (max-width: 1100px) {
+    .cards-grid { gap: 28px; }
+    .phone-frame { --frame-w: 230px; border-radius: 34px; }
+    .phone-screen { border-radius: 34px; }
+    .card { width: 175px; }
+}
+@media (max-width: 640px) {
+    .cards-grid { gap: 20px; }
+    .phone-frame { --frame-w: 200px; border-radius: 28px; }
+    .phone-screen { border-radius: 28px; }
+    .phone-frame::before { width: 65px; height: 20px; top: 8px; border-radius: 14px; }
+    .phone-frame::after { top: 13px; width: 8px; height: 8px; left: calc(50% + 16px); }
+    .phone-home-bar { width: 75px; height: 3px; bottom: 6px; }
+    .grade-badge { top: 38px; font-size: 10px; padding: 3px 14px; }
+    .card { width: 150px; }
+    .page-header h1 { font-size: 16px; letter-spacing: 4px; }
+    .page-header .subtitle { font-size: 9px; letter-spacing: 2px; }
+}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+    <h1><span>Card Rarity</span> Showcase</h1>
+    <p class="subtitle">SSR · SR · R · N — Progressive Holographic Effects</p>
+    <div class="divider"></div>
+</div>
+
+<div class="cards-grid">
+
+    <!-- SSR -->
+    <div class="card-demo">
+        <div class="phone-frame grade-ssr">
+            <div class="phone-screen"></div>
+            <span class="grade-badge">SSR</span>
+            <div class="card grade-ssr">
+                <div class="card__front"><img src="./492x656APNG.png" alt="" onerror="this.src='./492x656.jpg'"></div>
+                <div class="card__shine"></div>
+                <div class="card__glare"></div>
+            </div>
+            <div class="phone-home-bar"></div>
+        </div>
+        <p class="grade-desc"><strong>Rainbow Holo + Glitter + Aura</strong><br>最高品质全息效果</p>
+    </div>
+
+    <!-- SR -->
+    <div class="card-demo">
+        <div class="phone-frame grade-sr">
+            <div class="phone-screen"></div>
+            <span class="grade-badge">SR</span>
+            <div class="card grade-sr">
+                <div class="card__front"><img src="./492x656APNG.png" alt="" onerror="this.src='./492x656.jpg'"></div>
+                <div class="card__shine"></div>
+                <div class="card__glare"></div>
+            </div>
+            <div class="phone-home-bar"></div>
+        </div>
+        <p class="grade-desc"><strong>Scanline + Rainbow Spectrum</strong><br>高品质全息效果</p>
+    </div>
+
+    <!-- R -->
+    <div class="card-demo">
+        <div class="phone-frame grade-r">
+            <div class="phone-screen"></div>
+            <span class="grade-badge">R</span>
+            <div class="card grade-r">
+                <div class="card__front"><img src="./492x656APNG.png" alt="" onerror="this.src='./492x656.jpg'"></div>
+                <div class="card__shine"></div>
+                <div class="card__glare"></div>
+            </div>
+            <div class="phone-home-bar"></div>
+        </div>
+        <p class="grade-desc"><strong>Mono Gradient Sheen</strong><br>中等品质全息效果</p>
+    </div>
+
+    <!-- N -->
+    <div class="card-demo">
+        <div class="phone-frame grade-n">
+            <div class="phone-screen"></div>
+            <span class="grade-badge">N</span>
+            <div class="card grade-n">
+                <div class="card__front"><img src="./492x656APNG.png" alt="" onerror="this.src='./492x656.jpg'"></div>
+                <div class="card__shine"></div>
+                <div class="card__glare"></div>
+            </div>
+            <div class="phone-home-bar"></div>
+        </div>
+        <p class="grade-desc"><strong>Subtle Silver</strong><br>基础品质</p>
+    </div>
+
+</div>
+
+<script>
+// ===== 设置遮罩 =====
+document.querySelectorAll('.card').forEach(function(card) {
+    var img = card.querySelector('.card__front img');
+    if (img && img.src) {
+        card.style.setProperty('--card-mask', 'url(' + img.src + ')');
+        // 图片加载完成后更新遮罩（处理相对路径）
+        img.addEventListener('load', function() {
+            card.style.setProperty('--card-mask', 'url(' + this.src + ')');
+        });
+    }
+});
+
+// ===== 交互逻辑 =====
+function handleInteraction(card, clientX, clientY) {
+    var rect = card.getBoundingClientRect();
+    var x = clientX - rect.left;
+    var y = clientY - rect.top;
+
+    var px = Math.max(0, Math.min(1, x / rect.width));
+    var py = Math.max(0, Math.min(1, y / rect.height));
+    var fromCenter = Math.sqrt(Math.pow(px - 0.5, 2) + Math.pow(py - 0.5, 2));
+
+    var rotateY = (px - 0.5) * 28;
+    var rotateX = (py - 0.5) * -28;
+
+    card.style.setProperty('--pointer-x', (px * 100) + '%');
+    card.style.setProperty('--pointer-y', (py * 100) + '%');
+    card.style.setProperty('--pointer-from-center', fromCenter.toFixed(3));
+    card.style.setProperty('--pointer-from-top', py.toFixed(3));
+    card.style.setProperty('--pointer-from-left', px.toFixed(3));
+    card.style.setProperty('--rotate-x', rotateY + 'deg');
+    card.style.setProperty('--rotate-y', rotateX + 'deg');
+    card.style.setProperty('--background-x', (px * 100) + '%');
+    card.style.setProperty('--background-y', (py * 100) + '%');
+    card.style.setProperty('--card-opacity', '1');
+
+    card.style.transform = 'perspective(600px) rotateY(' + rotateY + 'deg) rotateX(' + rotateX + 'deg)';
+}
+
+function resetCard(card) {
+    card.style.setProperty('--card-opacity', '0');
+    card.style.transform = 'perspective(600px) rotateY(0deg) rotateX(0deg)';
+    card.classList.remove('active');
+}
+
+document.querySelectorAll('.card').forEach(function(card) {
+
+    // ===== 鼠标事件 =====
+    card.addEventListener('mousemove', function(e) {
+        this.classList.add('active');
+        handleInteraction(this, e.clientX, e.clientY);
+    });
+    card.addEventListener('mouseleave', function() {
+        resetCard(this);
+    });
+
+    // ===== 触摸事件（移动端）=====
+    card.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        this.classList.add('active');
+        var t = e.touches[0];
+        handleInteraction(this, t.clientX, t.clientY);
+    }, { passive: false });
+
+    card.addEventListener('touchmove', function(e) {
+        e.preventDefault();
+        var t = e.touches[0];
+        handleInteraction(this, t.clientX, t.clientY);
+    }, { passive: false });
+
+    card.addEventListener('touchend', function() {
+        resetCard(this);
+    });
+});
+
+// ===== 陀螺仪支持（移动端倾斜手机交互）=====
+if (window.DeviceOrientationEvent) {
+    var gyroCards = document.querySelectorAll('.card');
+    var lastGyroTime = 0;
+
+    window.addEventListener('deviceorientation', function(e) {
+        var now = Date.now();
+        if (now - lastGyroTime < 50) return; // 节流 20fps
+        lastGyroTime = now;
+
+        var beta = e.beta || 0;   // 前后倾斜 -180~180
+        var gamma = e.gamma || 0; // 左右倾斜 -90~90
+
+        // 归一化到 0~1
+        var px = Math.max(0, Math.min(1, (gamma + 45) / 90));
+        var py = Math.max(0, Math.min(1, (beta + 20) / 80));
+
+        gyroCards.forEach(function(card) {
+            // 只在没有触摸时用陀螺仪
+            if (card.classList.contains('active')) return;
+
+            var fromCenter = Math.sqrt(Math.pow(px - 0.5, 2) + Math.pow(py - 0.5, 2));
+            var rotateY = (px - 0.5) * 18;
+            var rotateX = (py - 0.5) * -18;
+
+            card.style.setProperty('--pointer-x', (px * 100) + '%');
+            card.style.setProperty('--pointer-y', (py * 100) + '%');
+            card.style.setProperty('--pointer-from-center', fromCenter.toFixed(3));
+            card.style.setProperty('--pointer-from-top', py.toFixed(3));
+            card.style.setProperty('--pointer-from-left', px.toFixed(3));
+            card.style.setProperty('--background-x', (px * 100) + '%');
+            card.style.setProperty('--background-y', (py * 100) + '%');
+            card.style.setProperty('--card-opacity', '0.6');
+            card.style.transform = 'perspective(600px) rotateY(' + rotateY + 'deg) rotateX(' + rotateX + 'deg)';
+        });
+    });
+}
+</script>
+</body>
+</html>

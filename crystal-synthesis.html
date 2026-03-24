@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>水晶碎片合成 V2</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            min-height: 100vh;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: -apple-system, sans-serif;
+        }
+
+        canvas { display: block; position: fixed; top: 0; left: 0; z-index: 0; }
+
+        .btn-bar {
+            position: fixed;
+            bottom: 40px;
+            display: flex;
+            gap: 20px;
+            z-index: 100;
+        }
+
+        .btn-bar button {
+            padding: 12px 40px;
+            font-size: 13px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(180, 220, 255, 0.9);
+            background: rgba(30, 50, 100, 0.4);
+            border: 1px solid rgba(100, 160, 255, 0.25);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-bar button:hover {
+            border-color: rgba(130, 190, 255, 0.6);
+            box-shadow: 0 6px 30px rgba(80, 140, 255, 0.3);
+            color: #fff;
+        }
+        /* ===== 全息卡牌 ===== */
+        .holo-card-wrapper {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            perspective: 1200px;
+        }
+
+        .holo-card-wrapper.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* 入场旋转动画 */
+        .holo-card-wrapper.active .holo-card {
+            animation: cardReveal 0.9s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+        }
+
+        @keyframes cardReveal {
+            0% {
+                transform: perspective(800px) rotateY(90deg) scale(0.85);
+                opacity: 0;
+                filter: brightness(2) blur(4px);
+            }
+            15% {
+                opacity: 1;
+                filter: brightness(1.8) blur(2px);
+            }
+            50% {
+                transform: perspective(800px) rotateY(-15deg) scale(1.02);
+                filter: brightness(1.3) blur(0);
+            }
+            70% {
+                transform: perspective(800px) rotateY(8deg) scale(1);
+                filter: brightness(1.1);
+            }
+            85% {
+                transform: perspective(800px) rotateY(-3deg) scale(1);
+                filter: brightness(1);
+            }
+            100% {
+                transform: perspective(800px) rotateY(0deg) scale(1);
+                filter: brightness(1);
+            }
+        }
+
+        :root {
+            --pointer-x: 50%;
+            --pointer-y: 50%;
+            --pointer-from-center: 0;
+            --pointer-from-top: 0.5;
+            --pointer-from-left: 0.5;
+            --card-opacity: 0;
+            --rotate-x: 0deg;
+            --rotate-y: 0deg;
+            --background-x: 50%;
+            --background-y: 50%;
+            --red: hsl(2, 100%, 73%);
+            --yellow: hsl(53, 100%, 69%);
+            --green: hsl(93, 100%, 69%);
+            --cyan: hsl(176, 100%, 76%);
+            --blue: hsl(228, 100%, 74%);
+            --violet: hsl(283, 100%, 73%);
+            --card-radius: 4.55% / 3.5%;
+        }
+
+        .holo-card {
+            width: 492px;
+            height: 656px;
+            position: relative;
+            border-radius: var(--card-radius);
+            transform-style: preserve-3d;
+            transform: perspective(800px) rotateY(var(--rotate-x)) rotateX(var(--rotate-y));
+            transition: transform 0.15s ease-out;
+            cursor: pointer;
+            will-change: transform;
+        }
+
+        .holo-card:hover {
+            box-shadow:
+                0 0 3px -1px white,
+                0 0 3px 1px hsl(47, 100%, 78%),
+                0 0 12px 2px hsl(180, 80%, 70%),
+                0px 10px 20px -5px black,
+                0 0 60px 5px rgba(100, 200, 255, 0.15);
+        }
+
+        .holo-card > .card__front {
+            position: absolute;
+            inset: 0;
+            border-radius: var(--card-radius);
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .holo-card > .card__front > img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .holo-card > .card__shine {
+            position: absolute;
+            inset: 0;
+            border-radius: var(--card-radius);
+            overflow: hidden;
+            z-index: 2;
+            opacity: var(--card-opacity);
+            mix-blend-mode: color-dodge;
+            filter: brightness(1.1) contrast(1.1) saturate(1.2);
+            pointer-events: none;
+        }
+
+        .holo-card > .card__shine::before,
+        .holo-card > .card__shine::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: var(--card-radius);
+        }
+
+        /* HOLO 全息效果 */
+        .holo-card .card__shine {
+            background-image:
+                repeating-linear-gradient(110deg,
+                    var(--violet), var(--blue), var(--green), var(--yellow), var(--red),
+                    var(--violet), var(--blue), var(--green), var(--yellow), var(--red),
+                    var(--violet), var(--blue), var(--green), var(--yellow), var(--red)
+                ),
+                repeating-linear-gradient(90deg, black 0px, black 2px, #666 2px, #666 4px);
+            background-position:
+                calc(((50% - var(--background-x)) * 2.6) + 50%) calc(((50% - var(--background-y)) * 3.5) + 50%),
+                center center;
+            background-size: 400% 400%, cover;
+            background-blend-mode: overlay;
+        }
+
+        .holo-card .card__shine::before {
+            background-image:
+                repeating-linear-gradient(90deg, black 6%, #777 9%, black 10.5%, #777 12%, black 15%, black 42%),
+                repeating-linear-gradient(90deg, black 6%, #777 9%, black 10.5%, #777 12%, black 15%, black 30%);
+            background-position:
+                calc((((50% - var(--background-x)) * 1.65) + 50%) + (var(--background-y) * 0.5)) var(--background-x),
+                calc((((50% - var(--background-x)) * -0.9) + 50%) - (var(--background-y) * 0.75)) var(--background-y);
+            background-size: 200% 200%, 200% 200%;
+            background-blend-mode: screen;
+            filter: brightness(1.15) contrast(1.1);
+            mix-blend-mode: hard-light;
+        }
+
+        .holo-card .card__shine::after {
+            background-image: radial-gradient(
+                farthest-corner circle at var(--pointer-x) var(--pointer-y),
+                hsla(0, 0%, 90%, 0.4) 0%, hsla(0, 0%, 78%, 0.06) 30%, hsl(0, 0%, 0%) 90%
+            );
+            mix-blend-mode: luminosity;
+            filter: brightness(0.6) contrast(3);
+        }
+
+        .holo-card > .card__glare {
+            position: absolute;
+            inset: 0;
+            border-radius: var(--card-radius);
+            overflow: hidden;
+            z-index: 3;
+            opacity: var(--card-opacity);
+            mix-blend-mode: overlay;
+            pointer-events: none;
+            background-image: radial-gradient(
+                farthest-corner circle at var(--pointer-x) var(--pointer-y),
+                hsla(0, 0%, 100%, 0.35) 10%,
+                hsla(0, 0%, 100%, 0.15) 30%,
+                hsla(0, 0%, 0%, 0.3) 90%
+            );
+            filter: brightness(0.75) contrast(1.2) blur(2px);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <!-- 全息卡牌（合成完成后显示） -->
+    <div class="holo-card-wrapper" id="holoWrapper">
+        <div class="holo-card" id="holoCard">
+            <div class="card__front"><img src="./492x656.jpg" alt=""></div>
+            <div class="card__shine"></div>
+            <div class="card__glare"></div>
+        </div>
+    </div>
+
+    <div class="btn-bar">
+        <button id="btnAssemble">✦ 开始合成</button>
+        <button id="btnShatter">↺ 重置</button>
+    </div>
+
+    <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    let W, H;
+    function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // ===== 图片加载 =====
+    const img = new Image();
+    img.src = './492x656.jpg';
+    let imgLoaded = false;
+    img.onload = () => { imgLoaded = true; };
+
+    const TARGET_W = 492, TARGET_H = 656;
+
+    // ===== 碎片定义 =====
+    // 每个碎片: 二维多边形顶点 (百分比), 在3D空间中会渲染成有厚度的水晶块
+    const fragmentDefs = [
+        { verts: [[0,0],[28,0],[32,8],[18,15],[0,12]] },
+        { verts: [[28,0],[52,0],[58,5],[45,18],[32,8]] },
+        { verts: [[52,0],[76,0],[72,12],[58,5]] },
+        { verts: [[76,0],[100,0],[100,18],[85,22],[72,12]] },
+        { verts: [[0,12],[18,15],[22,32],[8,38],[0,35]] },
+        { verts: [[18,15],[32,8],[45,18],[48,35],[35,42],[22,32]] },
+        { verts: [[45,18],[58,5],[72,12],[75,28],[62,38],[48,35]] },
+        { verts: [[72,12],[85,22],[100,18],[100,42],[88,45],[75,28]] },
+        { verts: [[0,35],[8,38],[22,32],[25,55],[15,68],[0,65]] },
+        { verts: [[22,32],[35,42],[48,35],[55,52],[45,70],[28,72],[25,55]] },
+        { verts: [[48,35],[62,38],[75,28],[82,48],[70,65],[55,52]] },
+        { verts: [[75,28],[88,45],[100,42],[100,70],[85,68],[82,48]] },
+        { verts: [[0,65],[15,68],[25,55],[28,72],[18,85],[0,85]] },
+        { verts: [[0,85],[18,85],[28,72],[45,70],[55,52],[70,65],[65,82],[48,100],[0,100]] },
+        { verts: [[55,52],[70,65],[82,48],[85,68],[100,70],[100,100],[48,100],[65,82]] }
+    ];
+
+    // ===== 碎片类 =====
+    class CrystalFragment {
+        constructor(def, index, total) {
+            this.verts = def.verts.map(v => [v[0] / 100 * TARGET_W, v[1] / 100 * TARGET_H]);
+            this.index = index;
+
+            // 碎片中心
+            let cx = 0, cy = 0;
+            this.verts.forEach(v => { cx += v[0]; cy += v[1]; });
+            this.cx = cx / this.verts.length;
+            this.cy = cy / this.verts.length;
+
+            // 3D厚度 - 更厚的水晶块
+            this.thickness = 35 + Math.random() * 25;
+
+            // 面颜色变化 - 每个面不同深浅的蓝色
+            this.faceColors = [
+                this.randomBlue(0.55, 0.75),  // 正面
+                this.randomBlue(0.2, 0.4),     // 侧面较暗
+                this.randomBlue(0.75, 0.95),   // 顶面较亮（高光面）
+            ];
+
+            // 每个碎片独立的折射偏移角
+            this.refractAngle = Math.random() * Math.PI * 2;
+            this.specularPos = { x: Math.random(), y: Math.random() };
+
+            // 棱线亮度
+            this.edgeBrightness = 0.7 + Math.random() * 0.3;
+
+            // 散开状态
+            this.resetScatter();
+
+            // 目标位置（拼合后）- 每个碎片需要移到正确的位置让图片对齐
+            // draw 时在 (offsetX + x, offsetY + y) 处 translate，然后在 (-cx, -cy) 绘制图
+            // 图的左上角 = (centerX + x - cx, centerY + y - cy)
+            // 要让所有碎片图左上角在 (centerX - TARGET_W/2, centerY - TARGET_H/2)
+            // 所以 x - cx = -TARGET_W/2，即 x = cx - TARGET_W/2
+            this.tx = this.cx - TARGET_W / 2;
+            this.ty = this.cy - TARGET_H / 2;
+            this.tz = 0;
+            this.trx = 0; this.try_ = 0; this.trz = 0;
+            this.tscale = 1; this.topacity = 1;
+
+            // 当前状态
+            this.x = this.sx; this.y = this.sy; this.z = this.sz;
+            this.rx = this.srx; this.ry = this.sry; this.rz = this.srz;
+            this.scale = this.sscale; this.opacity = 0;
+
+            // 动画
+            this.progress = 0;
+            this.delay = index * 0.04 + Math.random() * 0.06;
+            this.speed = 0.6 + Math.random() * 0.3;
+
+            // 光晕强度
+            this.glowIntensity = 1;
+        }
+
+        randomBlue(minL, maxL) {
+            const h = 210 + Math.random() * 40;
+            const s = 50 + Math.random() * 40;
+            const l = minL + Math.random() * (maxL - minL);
+            return { h, s, l };
+        }
+
+        resetScatter() {
+            const angle = Math.atan2(this.cy - TARGET_H / 2, this.cx - TARGET_W / 2) + (Math.random() - 0.5) * 0.8;
+            const dist = 400 + Math.random() * 500;
+            this.sx = Math.cos(angle) * dist;
+            this.sy = Math.sin(angle) * dist;
+            this.sz = (Math.random() - 0.5) * 600;
+            this.srx = (Math.random() - 0.5) * Math.PI;
+            this.sry = (Math.random() - 0.5) * Math.PI;
+            this.srz = (Math.random() - 0.5) * Math.PI * 2;
+            this.sscale = 0.4 + Math.random() * 0.4;
+        }
+
+        setAssemble() {
+            // 保存当前位置作为飞行起点
+            this.sx = this.x;
+            this.sy = this.y;
+            this.sz = this.z !== undefined ? this.z : this.sz;
+            this.srx = this.rx !== undefined ? this.rx : this.srx;
+            this.sry = this.ry !== undefined ? this.ry : this.sry;
+            this.srz = this.rz !== undefined ? this.rz : this.srz;
+            this.sscale = 1; // 当前已经是正常大小
+            this.progress = 0;
+            this.opacity = 1;
+        }
+
+        setScatter() {
+            this.resetScatter();
+            this.progress = 1;
+        }
+
+        // 缓动函数
+        easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
+        easeInCubic(t) { return t * t * t; }
+
+        // easeOutExpo: 开始快速推进，最后急停到位
+        easeAssemble(t) {
+            return t === 1 ? 1 : 1 - Math.pow(2, -12 * t);
+        }
+
+        update(dt, assembling) {
+            if (assembling) {
+                const t = Math.max(0, Math.min(1, this.progress));
+                const e = this.easeAssemble(t);
+                this.x = this.sx + (this.tx - this.sx) * e;
+                this.y = this.sy + (this.ty - this.sy) * e;
+                this.z = this.sz + (this.tz - this.sz) * e;
+                this.rx = this.srx + (this.trx - this.srx) * e;
+                this.ry = this.sry + (this.try_ - this.sry) * e;
+                this.rz = this.srz + (this.trz - this.srz) * e;
+                this.scale = this.sscale + (this.tscale - this.sscale) * e;
+                this.opacity = 1;
+                this.glowIntensity = 1 - e * 0.5;
+
+                if (this.progress < 1) {
+                    this.progress = Math.min(1, this.progress + dt * this.speed);
+                }
+            } else {
+                const t = Math.max(0, Math.min(1, 1 - this.progress));
+                const e = this.easeInCubic(1 - this.progress);
+                this.x = this.tx + (this.sx - this.tx) * (1 - e);
+                this.y = this.ty + (this.sy - this.ty) * (1 - e);
+                this.z = this.tz + (this.sz - this.tz) * (1 - e);
+                this.rx = this.trx + (this.srx - this.trx) * (1 - e);
+                this.ry = this.try_ + (this.sry - this.try_) * (1 - e);
+                this.rz = this.trz + (this.srz - this.trz) * (1 - e);
+                this.scale = this.tscale + (this.sscale - this.tscale) * (1 - e);
+                this.opacity = e;
+                this.glowIntensity = 1;
+
+                if (this.progress > 0) {
+                    this.progress = Math.max(0, this.progress - dt * 1.5);
+                }
+            }
+        }
+
+        // 3D变换单个顶点
+        transformVertex(v, cosRx, sinRx, cosRy, sinRy, cosRz, sinRz) {
+            let x = v[0] - this.cx, y = v[1] - this.cy, z = v[2] || 0;
+            // Rotate Y
+            let x2 = x * cosRy + z * sinRy;
+            let z2 = -x * sinRy + z * cosRy;
+            x = x2; z = z2;
+            // Rotate X
+            let y2 = y * cosRx - z * sinRx;
+            z2 = y * sinRx + z * cosRx;
+            y = y2; z = z2;
+            // Rotate Z
+            x2 = x * cosRz - y * sinRz;
+            y2 = x * sinRz + y * cosRz;
+            return [x2, y2, z];
+        }
+
+        // 计算面法线（用于光照）
+        faceNormal(a, b, c) {
+            const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+            const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+            const nx = uy * vz - uz * vy;
+            const ny = uz * vx - ux * vz;
+            const nz = ux * vy - uy * vx;
+            const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+            return [nx / len, ny / len, nz / len];
+        }
+
+        // 绘制3D水晶碎片
+        draw(ctx, offsetX, offsetY, globalGlow) {
+            if (this.opacity < 0.01) return;
+
+            ctx.save();
+            ctx.globalAlpha = this.opacity;
+
+            const px = offsetX + this.x;
+            const py = offsetY + this.y;
+            ctx.translate(px, py);
+            ctx.scale(this.scale, this.scale);
+
+            const cosRx = Math.cos(this.rx), sinRx = Math.sin(this.rx);
+            const cosRy = Math.cos(this.ry), sinRy = Math.sin(this.ry);
+            const cosRz = Math.cos(this.rz), sinRz = Math.sin(this.rz);
+
+            // 厚度随拼合进度变化：散开时立体，拼合时变平
+            const flatness = this.easeOutQuart(Math.max(0, Math.min(1, this.progress)));
+            const T = this.thickness * (1 - flatness); // 拼合完成时厚度=0
+
+            // 正面顶点（z = T/2）和背面顶点（z = -T/2）
+            const frontVerts3D = this.verts.map(v => this.transformVertex(
+                [v[0], v[1], T / 2], cosRx, sinRx, cosRy, sinRy, cosRz, sinRz
+            ));
+            const backVerts3D = this.verts.map(v => this.transformVertex(
+                [v[0], v[1], -T / 2], cosRx, sinRx, cosRy, sinRy, cosRz, sinRz
+            ));
+
+            // 2D投影
+            const frontVerts = frontVerts3D.map(v => [v[0], v[1]]);
+            const backVerts = backVerts3D.map(v => [v[0], v[1]]);
+
+            // 光照方向（右上方来光）
+            const lightDir = [0.4, -0.5, 0.75];
+            const lightLen = Math.sqrt(lightDir[0] ** 2 + lightDir[1] ** 2 + lightDir[2] ** 2);
+            lightDir[0] /= lightLen; lightDir[1] /= lightLen; lightDir[2] /= lightLen;
+
+            const glowStr = this.glowIntensity * globalGlow;
+            const fc1 = this.faceColors[1]; // 侧面色
+            const fc2 = this.faceColors[2]; // 亮面色
+
+            // ===== 1. 绘制背面（深色）=====
+            const backNormal = this.faceNormal(backVerts3D[0], backVerts3D[1], backVerts3D[2] || backVerts3D[0]);
+            const backDot = backNormal[0] * lightDir[0] + backNormal[1] * lightDir[1] + backNormal[2] * lightDir[2];
+            if (backDot < 0) {
+                ctx.beginPath();
+                backVerts.forEach((v, i) => i === 0 ? ctx.moveTo(v[0], v[1]) : ctx.lineTo(v[0], v[1]));
+                ctx.closePath();
+                const backL = Math.max(10, fc1.l * 100 * (0.3 + Math.max(0, backDot) * 0.4));
+                ctx.fillStyle = `hsla(${fc1.h}, ${fc1.s}%, ${backL}%, 0.9)`;
+                ctx.fill();
+            }
+
+            // ===== 2. 绘制侧面（每条边一个面）=====
+            const n = this.verts.length;
+            // 收集侧面，按深度排序（画家算法）
+            const sideFaces = [];
+            for (let i = 0; i < n; i++) {
+                const j = (i + 1) % n;
+                const midZ = (frontVerts3D[i][2] + frontVerts3D[j][2] + backVerts3D[i][2] + backVerts3D[j][2]) / 4;
+                sideFaces.push({ i, j, midZ });
+            }
+            sideFaces.sort((a, b) => a.midZ - b.midZ);
+
+            sideFaces.forEach(face => {
+                const { i, j } = face;
+                const quad = [
+                    frontVerts3D[i], frontVerts3D[j],
+                    backVerts3D[j], backVerts3D[i]
+                ];
+
+                // 法线计算
+                const normal = this.faceNormal(quad[0], quad[1], quad[3]);
+                const dot = normal[0] * lightDir[0] + normal[1] * lightDir[1] + normal[2] * lightDir[2];
+                const brightness = 0.25 + Math.max(0, dot) * 0.75;
+
+                ctx.beginPath();
+                ctx.moveTo(frontVerts[i][0], frontVerts[i][1]);
+                ctx.lineTo(frontVerts[j][0], frontVerts[j][1]);
+                ctx.lineTo(backVerts[j][0], backVerts[j][1]);
+                ctx.lineTo(backVerts[i][0], backVerts[i][1]);
+                ctx.closePath();
+
+                // 侧面渐变 - 模拟水晶折射
+                const grd = ctx.createLinearGradient(
+                    frontVerts[i][0], frontVerts[i][1],
+                    backVerts[i][0], backVerts[i][1]
+                );
+                const sideH = fc1.h + (fc2.h - fc1.h) * brightness;
+                const sideL1 = fc1.l * 100 * brightness;
+                const sideL2 = fc2.l * 100 * brightness * 0.7;
+                grd.addColorStop(0, `hsla(${sideH}, ${fc1.s + 10}%, ${sideL1}%, 0.92)`);
+                grd.addColorStop(0.5, `hsla(${sideH + 10}, ${fc1.s + 15}%, ${(sideL1 + sideL2) / 2}%, 0.85)`);
+                grd.addColorStop(1, `hsla(${sideH}, ${fc1.s}%, ${sideL2}%, 0.9)`);
+                ctx.fillStyle = grd;
+                ctx.fill();
+
+                // 侧面棱线 - 亮白发光
+                ctx.shadowColor = `rgba(180, 220, 255, ${0.6 * glowStr})`;
+                ctx.shadowBlur = 6 * glowStr;
+                ctx.strokeStyle = `rgba(220, 240, 255, ${(0.3 + brightness * 0.5) * this.edgeBrightness})`;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                // 高亮面 - 接近光源的侧面额外高光条
+                if (dot > 0.3) {
+                    const specGrd = ctx.createLinearGradient(
+                        frontVerts[i][0], frontVerts[i][1],
+                        (frontVerts[j][0] + backVerts[j][0]) / 2, (frontVerts[j][1] + backVerts[j][1]) / 2
+                    );
+                    specGrd.addColorStop(0, `rgba(255, 255, 255, ${0.25 * dot * glowStr})`);
+                    specGrd.addColorStop(0.5, `rgba(200, 230, 255, ${0.1 * dot * glowStr})`);
+                    specGrd.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                    ctx.fillStyle = specGrd;
+                    ctx.fill();
+                }
+            });
+
+            // ===== 3. 绘制正面 =====
+            const frontNormal = this.faceNormal(frontVerts3D[0], frontVerts3D[1], frontVerts3D[2] || frontVerts3D[0]);
+            const frontDot = frontNormal[0] * lightDir[0] + frontNormal[1] * lightDir[1] + frontNormal[2] * lightDir[2];
+
+            ctx.beginPath();
+            frontVerts.forEach((v, i) => i === 0 ? ctx.moveTo(v[0], v[1]) : ctx.lineTo(v[0], v[1]));
+            ctx.closePath();
+
+            ctx.save();
+            ctx.clip();
+
+            // 贴图
+            if (imgLoaded) {
+                ctx.drawImage(img, 0, 0, TARGET_W, TARGET_H, -this.cx, -this.cy, TARGET_W, TARGET_H);
+
+                // 水晶蓝色叠加（随拼合进度消失）
+                const fc0 = this.faceColors[0];
+                const overlayAlpha = (0.15 + glowStr * 0.2) * (1 - flatness);
+                if (overlayAlpha > 0.01) {
+                    ctx.fillStyle = `hsla(${fc0.h}, ${fc0.s + 20}%, ${fc0.l * 100}%, ${overlayAlpha})`;
+                    ctx.fillRect(-this.cx, -this.cy, TARGET_W, TARGET_H);
+                }
+
+                // 主高光 - 从右上打入的强光（随拼合进度消失）
+                const hlStr = glowStr * (1 - flatness);
+                const hlGrad = ctx.createLinearGradient(-this.cx, -this.cy, -this.cx + TARGET_W, -this.cy + TARGET_H);
+                hlGrad.addColorStop(0, `rgba(255, 255, 255, ${0.28 * hlStr})`);
+                hlGrad.addColorStop(0.25, `rgba(200, 230, 255, ${0.12 * hlStr})`);
+                hlGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
+                hlGrad.addColorStop(0.75, `rgba(180, 210, 255, ${0.06 * hlStr})`);
+                hlGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                if (hlStr > 0.01) {
+                    ctx.fillStyle = hlGrad;
+                    ctx.fillRect(-this.cx, -this.cy, TARGET_W, TARGET_H);
+                }
+
+                // 镜面高光点（specular，随拼合消失）
+                if (hlStr > 0.01) {
+                    const spX = -this.cx + this.specularPos.x * TARGET_W;
+                    const spY = -this.cy + this.specularPos.y * TARGET_H;
+                    const spGrad = ctx.createRadialGradient(spX, spY, 0, spX, spY, 60);
+                    spGrad.addColorStop(0, `rgba(255, 255, 255, ${0.35 * hlStr * Math.max(0, frontDot)})`);
+                    spGrad.addColorStop(0.4, `rgba(200, 230, 255, ${0.1 * hlStr})`);
+                    spGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                    ctx.fillStyle = spGrad;
+                    ctx.fillRect(-this.cx, -this.cy, TARGET_W, TARGET_H);
+                }
+            } else {
+                const fc0 = this.faceColors[0];
+                ctx.fillStyle = `hsla(${fc0.h}, ${fc0.s}%, ${fc0.l * 100}%, 0.85)`;
+                ctx.fill();
+            }
+
+            ctx.restore();
+
+            // ===== 4. 正面棱线（发光白线）=====
+            ctx.beginPath();
+            frontVerts.forEach((v, i) => i === 0 ? ctx.moveTo(v[0], v[1]) : ctx.lineTo(v[0], v[1]));
+            ctx.closePath();
+
+            // 棱线和光效强度随拼合进度消失
+            const crystalStr = (1 - flatness) * glowStr;
+
+            // 多层发光棱线
+            if (crystalStr > 0.02) {
+                ctx.shadowColor = `rgba(150, 210, 255, ${0.9 * crystalStr})`;
+                ctx.shadowBlur = 18 * crystalStr;
+                ctx.strokeStyle = `rgba(230, 245, 255, ${0.95 * this.edgeBrightness * crystalStr})`;
+                ctx.lineWidth = 2 * (1 - flatness);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                // 第二层更细的亮线
+                ctx.strokeStyle = `rgba(255, 255, 255, ${0.7 * this.edgeBrightness * crystalStr})`;
+                ctx.lineWidth = 0.8 * (1 - flatness);
+                ctx.stroke();
+            }
+
+            // ===== 5. 内部切面线（水晶内部纹理）=====
+            this.drawInnerFacets(ctx, frontVerts, crystalStr);
+
+            // ===== 6. 整体外发光光晕 =====
+            if (crystalStr > 0.1) {
+                ctx.shadowColor = `rgba(80, 160, 255, ${0.6 * glowStr})`;
+                ctx.shadowBlur = 40 * glowStr;
+                ctx.beginPath();
+                frontVerts.forEach((v, i) => i === 0 ? ctx.moveTo(v[0], v[1]) : ctx.lineTo(v[0], v[1]));
+                ctx.closePath();
+                ctx.strokeStyle = `rgba(130, 190, 255, ${0.25 * glowStr})`;
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            ctx.restore();
+        }
+
+        drawInnerFacets(ctx, verts, glow) {
+            if (verts.length < 4 || glow < 0.05) return;
+
+            let mx = 0, my = 0;
+            verts.forEach(v => { mx += v[0]; my += v[1]; });
+            mx /= verts.length; my /= verts.length;
+
+            // 从中心向每个顶点画切面线
+            for (let i = 0; i < verts.length; i++) {
+                const alpha = (0.12 + 0.08 * Math.sin(i * 1.7 + this.refractAngle)) * this.edgeBrightness * glow;
+                ctx.beginPath();
+                ctx.moveTo(mx, my);
+                ctx.lineTo(verts[i][0], verts[i][1]);
+                ctx.strokeStyle = `rgba(200, 230, 255, ${alpha})`;
+                ctx.lineWidth = 0.7;
+                ctx.stroke();
+            }
+
+            // 中心折射亮点
+            if (glow > 0.2) {
+                const rGrad = ctx.createRadialGradient(mx, my, 0, mx, my, 40);
+                rGrad.addColorStop(0, `rgba(220, 240, 255, ${0.18 * glow})`);
+                rGrad.addColorStop(0.5, `rgba(180, 220, 255, ${0.06 * glow})`);
+                rGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.fillStyle = rGrad;
+                ctx.beginPath();
+                ctx.arc(mx, my, 40, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 额外的折射光斑
+            const rx = mx + Math.cos(this.refractAngle) * 25;
+            const ry = my + Math.sin(this.refractAngle) * 15;
+            if (glow > 0.3) {
+                const rGrad2 = ctx.createRadialGradient(rx, ry, 0, rx, ry, 20);
+                rGrad2.addColorStop(0, `rgba(255, 255, 255, ${0.15 * glow})`);
+                rGrad2.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.fillStyle = rGrad2;
+                ctx.beginPath();
+                ctx.arc(rx, ry, 20, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    }
+
+    // ===== 星尘 =====
+    class Star {
+        constructor() { this.reset(); }
+        reset() {
+            this.x = Math.random() * W;
+            this.y = Math.random() * H;
+            this.size = 0.5 + Math.random() * 2;
+            this.twinkleSpeed = 0.5 + Math.random() * 2;
+            this.phase = Math.random() * Math.PI * 2;
+            this.baseAlpha = 0.2 + Math.random() * 0.5;
+        }
+        draw(ctx, time) {
+            const alpha = this.baseAlpha * (0.5 + 0.5 * Math.sin(time * this.twinkleSpeed + this.phase));
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(200, 220, 255, ${alpha})`;
+            ctx.fill();
+        }
+    }
+
+    // ===== 浮动小碎片 =====
+    class FloatingShard {
+        constructor() { this.reset(); }
+        reset() {
+            const cx = W / 2, cy = H / 2;
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 300 + Math.random() * 200;
+            this.x = cx + Math.cos(angle) * dist;
+            this.y = cy + Math.sin(angle) * dist;
+            this.size = 5 + Math.random() * 15;
+            this.rot = Math.random() * Math.PI * 2;
+            this.rotSpeed = (Math.random() - 0.5) * 0.5;
+            this.driftX = (Math.random() - 0.5) * 0.3;
+            this.driftY = -0.2 - Math.random() * 0.3;
+            this.alpha = 0.3 + Math.random() * 0.4;
+            this.hue = 210 + Math.random() * 30;
+        }
+        update(dt) {
+            this.x += this.driftX;
+            this.y += this.driftY;
+            this.rot += this.rotSpeed * dt;
+            this.alpha -= dt * 0.05;
+            if (this.alpha <= 0) this.reset();
+        }
+        draw(ctx) {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rot);
+            ctx.globalAlpha = this.alpha;
+
+            // 小多面体
+            ctx.beginPath();
+            const n = 4 + Math.floor(Math.random() * 2);
+            for (let i = 0; i < 5; i++) {
+                const a = (i / 5) * Math.PI * 2;
+                const r = this.size * (0.6 + 0.4 * Math.sin(i * 2.1));
+                if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+                else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+            }
+            ctx.closePath();
+
+            ctx.fillStyle = `hsla(${this.hue}, 60%, 65%, 0.5)`;
+            ctx.fill();
+
+            ctx.shadowColor = `rgba(150, 200, 255, 0.8)`;
+            ctx.shadowBlur = 8;
+            ctx.strokeStyle = `rgba(200, 230, 255, 0.7)`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        }
+    }
+
+    // ===== 粒子爆发 =====
+    class BurstParticle {
+        constructor(x, y) {
+            this.x = x; this.y = y;
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 3 + Math.random() * 14;
+            this.vx = Math.cos(angle) * speed;
+            this.vy = Math.sin(angle) * speed;
+            this.life = 1;
+            this.decay = 0.008 + Math.random() * 0.018;
+            this.size = 1.5 + Math.random() * 5;
+            this.hue = 200 + Math.random() * 40;
+        }
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vx *= 0.97;
+            this.vy *= 0.97;
+            this.life -= this.decay;
+        }
+        draw(ctx) {
+            if (this.life <= 0) return;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * this.life, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${this.hue}, 80%, 80%, ${this.life})`;
+            ctx.shadowColor = `hsla(${this.hue}, 80%, 70%, ${this.life})`;
+            ctx.shadowBlur = 10;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    // ===== 初始化 =====
+    const fragments = fragmentDefs.map((def, i) => new CrystalFragment(def, i, fragmentDefs.length));
+    const stars = Array.from({ length: 150 }, () => new Star());
+    const floatingShards = Array.from({ length: 8 }, () => new FloatingShard());
+    let burstParticles = [];
+
+    // 状态: idle → appearing → floating → shaking → assembling → assembled → complete
+    let state = 'idle';
+    let globalTime = 0;
+    let flashAlpha = 0;
+    let shockwaveRadius = 0;
+    let shockwaveAlpha = 0;
+    let completionGlow = 0;
+    let globalGlow = 1;
+    let completeTimer = 0;
+    let cardAlpha = 0;
+    let screenShakeX = 0, screenShakeY = 0; // 屏幕震动
+    let shockwave2Radius = 0, shockwave2Alpha = 0; // 第二层冲击波
+    let shockwave3Radius = 0, shockwave3Alpha = 0; // 第三层冲击波
+    let lightPillarAlpha = 0; // 光柱
+    let freezeTimer = 0; // 定帧（合成瞬间画面暂停）
+    let impactFlashAlpha = 0; // 边缘闪白
+
+    // 碎片显现进度
+    let appearProgress = 0;   // 0~1 碎片从透明到显现
+    let shakeTimer = 0;       // 震动计时
+    let shakeIntensity = 0;   // 震动强度
+    let floatTimer = 0;       // 漂浮等待时间
+
+    // 初始时碎片全部隐藏
+    fragments.forEach(f => { f.opacity = 0; });
+
+    // 用户点击触发整个流程
+    function startSequence() {
+        if (state !== 'idle' && state !== 'complete') return;
+        
+        if (state === 'complete') {
+            // 从完成状态重新开始：先碎裂再重来
+            state = 'idle';
+            globalGlow = 1;
+            cardAlpha = 0;
+            completeTimer = 0;
+            appearProgress = 0;
+            shakeTimer = 0;
+            floatTimer = 0;
+            fragments.forEach(f => {
+                f.resetScatter();
+                f.opacity = 0;
+                f.progress = 0;
+                f.x = f.sx; f.y = f.sy; f.z = f.sz;
+                f.rx = f.srx; f.ry = f.sry; f.rz = f.srz;
+                f.scale = f.sscale;
+            });
+            // 下一帧重新启动
+            setTimeout(() => { state = 'idle'; startSequence(); }, 100);
+            return;
+        }
+
+        state = 'appearing';
+        appearProgress = 0;
+        globalGlow = 1;
+        cardAlpha = 0;
+        completeTimer = 0;
+    }
+
+    function startAssemble() {
+        state = 'assembling';
+        globalGlow = 1;
+        cardAlpha = 0;
+        completeTimer = 0;
+        fragments.forEach(f => f.setAssemble());
+    }
+
+    const holoWrapper = document.getElementById('holoWrapper');
+    const holoCard = document.getElementById('holoCard');
+
+    // 全息卡牌鼠标交互
+    holoCard.addEventListener('mousemove', function(e) {
+        const rect = this.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const px = x / rect.width;
+        const py = y / rect.height;
+        const fromCenter = Math.sqrt(Math.pow(px - 0.5, 2) + Math.pow(py - 0.5, 2));
+        const rotateY = (px - 0.5) * 25;
+        const rotateX = (py - 0.5) * -25;
+
+        this.style.setProperty('--pointer-x', (px * 100) + '%');
+        this.style.setProperty('--pointer-y', (py * 100) + '%');
+        this.style.setProperty('--pointer-from-center', fromCenter.toFixed(3));
+        this.style.setProperty('--pointer-from-top', py.toFixed(3));
+        this.style.setProperty('--pointer-from-left', px.toFixed(3));
+        this.style.setProperty('--rotate-x', rotateY + 'deg');
+        this.style.setProperty('--rotate-y', rotateX + 'deg');
+        this.style.setProperty('--background-x', (px * 100) + '%');
+        this.style.setProperty('--background-y', (py * 100) + '%');
+        this.style.setProperty('--card-opacity', '1');
+        this.style.transform = 'perspective(800px) rotateY(' + rotateY + 'deg) rotateX(' + rotateX + 'deg)';
+    });
+
+    holoCard.addEventListener('mouseleave', function() {
+        this.style.setProperty('--card-opacity', '0');
+        this.style.transform = 'perspective(800px) rotateY(0deg) rotateX(0deg)';
+    });
+
+    function showHoloCard() {
+        // 先移除再添加，确保动画每次都重新播放
+        holoWrapper.classList.remove('active');
+        void holoWrapper.offsetWidth; // 强制 reflow
+        holoWrapper.style.opacity = '1';
+        holoWrapper.classList.add('active');
+
+        // 动画结束后移除 animation，让鼠标交互的 transform 生效
+        holoCard.addEventListener('animationend', function handler() {
+            holoCard.style.animation = 'none';
+            holoCard.removeEventListener('animationend', handler);
+        });
+    }
+
+    function hideHoloCard() {
+        holoWrapper.style.opacity = '0';
+        holoWrapper.classList.remove('active');
+        holoCard.style.animation = ''; // 恢复，下次能重新播放
+        holoCard.style.setProperty('--card-opacity', '0');
+        holoCard.style.transform = 'perspective(800px) rotateY(0deg) rotateX(0deg)';
+    }
+
+    document.getElementById('btnAssemble').onclick = startSequence;
+    document.getElementById('btnShatter').onclick = () => {
+        if (state === 'idle') return;
+        hideHoloCard();
+        state = 'idle';
+        globalGlow = 1;
+        cardAlpha = 0;
+        completeTimer = 0;
+        completionGlow = 0;
+        appearProgress = 0;
+        shakeTimer = 0;
+        floatTimer = 0;
+        flashAlpha = 0;
+        shockwaveAlpha = 0;
+        burstParticles = [];
+        fragments.forEach(f => {
+            f.resetScatter();
+            f.opacity = 0;
+            f.progress = 0;
+            f.x = f.sx; f.y = f.sy; f.z = f.sz;
+            f.rx = f.srx; f.ry = f.sry; f.rz = f.srz;
+            f.scale = f.sscale;
+        });
+    };
+
+    // 边线数据（给Canvas用的数字版本）
+    const edgeLinesDef = [
+        { x: '28', y: '0', h: '12', r: 12 },
+        { x: '52', y: '0', h: '9', r: -8 },
+        { x: '76', y: '0', h: '16', r: 6 },
+        { x: '18', y: '12', h: '22', r: 5 },
+        { x: '45', y: '8', h: '28', r: -6 },
+        { x: '72', y: '12', h: '28', r: 4 },
+        { x: '25', y: '32', h: '24', r: 7 },
+        { x: '55', y: '35', h: '18', r: -4 },
+        { x: '82', y: '28', h: '22', r: 5 },
+        { x: '28', y: '55', h: '18', r: -6 },
+        { x: '70', y: '52', h: '16', r: 7 }
+    ];
+
+    // ===== 主循环 =====
+    let lastTime = 0;
+    function loop(timestamp) {
+        const dt = Math.min(0.05, (timestamp - lastTime) / 1000);
+        lastTime = timestamp;
+        globalTime += dt;
+
+        // 屏幕震动衰减
+        screenShakeX *= 0.85;
+        screenShakeY *= 0.85;
+        if (Math.abs(screenShakeX) > 0.5) {
+            screenShakeX += (Math.random() - 0.5) * Math.abs(screenShakeX) * 0.6;
+            screenShakeY += (Math.random() - 0.5) * Math.abs(screenShakeY) * 0.6;
+        }
+
+        ctx.clearRect(0, 0, W, H);
+        ctx.save();
+        ctx.translate(screenShakeX, screenShakeY);
+
+        // ===== 背景 =====
+        // 深蓝紫渐变
+        const bgGrad = ctx.createRadialGradient(W * 0.75, H * 0.3, 0, W * 0.5, H * 0.5, Math.max(W, H) * 0.8);
+        bgGrad.addColorStop(0, '#1a1a3e');
+        bgGrad.addColorStop(0.3, '#0d0d28');
+        bgGrad.addColorStop(0.7, '#080818');
+        bgGrad.addColorStop(1, '#020210');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, W, H);
+
+        // 右上角逆光
+        const lightGrad = ctx.createRadialGradient(W * 0.82, H * 0.15, 0, W * 0.82, H * 0.15, 500);
+        lightGrad.addColorStop(0, 'rgba(200, 220, 255, 0.25)');
+        lightGrad.addColorStop(0.3, 'rgba(150, 180, 255, 0.1)');
+        lightGrad.addColorStop(0.6, 'rgba(100, 140, 255, 0.03)');
+        lightGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = lightGrad;
+        ctx.fillRect(0, 0, W, H);
+
+        // 星尘
+        stars.forEach(s => s.draw(ctx, globalTime));
+
+        // ===== 碎片 =====
+        const centerX = W / 2;
+        const centerY = H / 2;
+
+        // ===== 阶段1: appearing - 碎片从透明逐渐显现 =====
+        if (state === 'appearing') {
+            appearProgress += dt * 0.5; // 约2秒完全显现
+
+            fragments.forEach((f, i) => {
+                // 每个碎片错开显现
+                const stagger = i * 0.04;
+                const localP = Math.max(0, Math.min(1, (appearProgress - stagger) * 1.5));
+                f.opacity = localP;
+                
+                // 轻微漂浮运动
+                f.x = f.sx + Math.sin(globalTime * 0.8 + i) * 5;
+                f.y = f.sy + Math.cos(globalTime * 0.6 + i * 0.7) * 5;
+            });
+
+            if (appearProgress >= 1.2) {
+                state = 'floating';
+                floatTimer = 0;
+                fragments.forEach(f => { f.opacity = 1; });
+            }
+        }
+
+        // ===== 阶段2: floating - 碎片漂浮一会 =====
+        if (state === 'floating') {
+            floatTimer += dt;
+
+            fragments.forEach((f, i) => {
+                f.x = f.sx + Math.sin(globalTime * 0.8 + i) * 8;
+                f.y = f.sy + Math.cos(globalTime * 0.6 + i * 0.7) * 8;
+                f.rz = f.srz + Math.sin(globalTime * 0.3 + i * 0.5) * 0.05;
+            });
+
+            // 漂浮0.8秒后开始震动
+            if (floatTimer > 0.8) {
+                state = 'shaking';
+                shakeTimer = 0;
+                shakeIntensity = 0;
+            }
+        }
+
+        // ===== 阶段3: shaking - 碎片震动，酝酿能量 =====
+        if (state === 'shaking') {
+            shakeTimer += dt;
+            // 震动强度逐渐增强
+            shakeIntensity = Math.min(1, shakeTimer / 0.8);
+            const intensity = shakeIntensity * 15;
+
+            fragments.forEach((f, i) => {
+                const shakeX = (Math.random() - 0.5) * intensity;
+                const shakeY = (Math.random() - 0.5) * intensity;
+                f.x = f.sx + shakeX;
+                f.y = f.sy + shakeY;
+            });
+
+            // 震动1秒后开始汇聚（只触发一次，因为 startAssemble 会改变 state）
+            if (shakeTimer > 1.0) {
+                // state 在 startAssemble 中会变为 'assembling'，不会再进这个 if(shaking) 分支
+                startAssemble();
+            }
+        }
+
+        // 浮动小碎片 - 一直显示作为背景装饰
+        floatingShards.forEach(s => { s.update(dt); s.draw(ctx); });
+
+        // ===== 阶段4+: assembling =====
+        const isAssembling = (state === 'assembling' || state === 'assembled');
+        if (isAssembling) {
+            fragments.forEach(f => f.update(dt, true));
+        }
+
+        // 检查是否全部拼合
+        if (state === 'assembling') {
+            const allDone = fragments.every(f => f.progress >= 0.98);
+            if (allDone) {
+                state = 'assembled';
+
+                // ===== 震撼合成特效（立即反馈）=====
+
+                // 立刻隐藏 Canvas 上的碎片（避免和全息卡牌重叠）
+                fragments.forEach(f => { f.opacity = 0; });
+
+                // 全息卡牌立刻旋转入场
+                showHoloCard();
+
+                // 超强闪光
+                flashAlpha = 2.5;
+                impactFlashAlpha = 1.5;
+
+                // 三重冲击波（错开时间）
+                shockwaveRadius = 0;
+                shockwaveAlpha = 1.2;
+                shockwave2Radius = 0;
+                shockwave2Alpha = 0; // 延迟触发
+                shockwave3Radius = 0;
+                shockwave3Alpha = 0;
+                setTimeout(() => { shockwave2Alpha = 1; }, 80);
+                setTimeout(() => { shockwave3Alpha = 0.8; }, 180);
+
+                // 光柱
+                lightPillarAlpha = 1.5;
+
+                // 屏幕震动
+                screenShakeX = (Math.random() - 0.5) * 20;
+                screenShakeY = (Math.random() - 0.5) * 15;
+
+                completionGlow = 1;
+
+                // 超多爆发粒子 - 分三波
+                for (let i = 0; i < 200; i++) {
+                    burstParticles.push(new BurstParticle(centerX, centerY));
+                }
+                setTimeout(() => {
+                    for (let i = 0; i < 80; i++) {
+                        burstParticles.push(new BurstParticle(
+                            centerX + (Math.random() - 0.5) * 200,
+                            centerY + (Math.random() - 0.5) * 260
+                        ));
+                    }
+                }, 150);
+            }
+        }
+
+        // 完成后快速切到 complete
+        if (state === 'assembled') {
+            completeTimer += dt;
+            globalGlow = 0;
+            cardAlpha = 1;
+            if (completeTimer > 0.5) {
+                state = 'complete';
+            }
+        }
+
+        // ===== 绘制碎片或完整卡片 =====
+        const imgX = centerX - TARGET_W / 2;
+        const imgY = centerY - TARGET_H / 2;
+
+        if (state === 'idle') {
+            // 空白，啥也不画
+        } else if (state === 'complete') {
+            // 全息卡牌由 DOM 层渲染，Canvas 不画卡片
+        } else if (state === 'assembled') {
+            // 碎片已隐藏，全息卡牌由 DOM 旋转入场，Canvas 不画任何卡片
+        } else if (state !== 'idle') {
+            // appearing / floating / shaking / assembling
+            const sorted = [...fragments].sort((a, b) => a.z - b.z);
+            sorted.forEach(f => f.draw(ctx, centerX, centerY, globalGlow));
+        }
+
+        // ===== 完成后的棱线光 =====
+        if (completionGlow > 0 && state === 'assembled') {
+            ctx.save();
+            ctx.globalAlpha = completionGlow * globalGlow;
+            // 绘制拼合后缝隙光
+            edgeLinesDef.forEach(line => {
+                const lx = centerX - TARGET_W / 2 + parseFloat(line.x) / 100 * TARGET_W;
+                const ly = centerY - TARGET_H / 2 + parseFloat(line.y) / 100 * TARGET_H;
+                const lh = parseFloat(line.h) / 100 * TARGET_H;
+
+                ctx.save();
+                ctx.translate(lx, ly);
+                ctx.rotate(line.r * Math.PI / 180);
+
+                const eGrad = ctx.createLinearGradient(0, 0, 0, lh);
+                eGrad.addColorStop(0, 'rgba(200, 230, 255, 0)');
+                eGrad.addColorStop(0.3, 'rgba(200, 230, 255, 0.7)');
+                eGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.9)');
+                eGrad.addColorStop(0.7, 'rgba(200, 230, 255, 0.7)');
+                eGrad.addColorStop(1, 'rgba(200, 230, 255, 0)');
+
+                ctx.shadowColor = 'rgba(150, 200, 255, 0.8)';
+                ctx.shadowBlur = 8;
+                ctx.strokeStyle = eGrad;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, lh);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                ctx.restore();
+            });
+            ctx.restore();
+
+            completionGlow = Math.max(0, completionGlow - dt * 0.3);
+        }
+
+        // ===== 以下特效使用加法混合，更通透 =====
+        ctx.globalCompositeOperation = 'lighter';
+
+        // ===== 闪光 =====
+        if (flashAlpha > 0) {
+            const fGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 600);
+            fGrad.addColorStop(0, `rgba(255, 255, 255, ${Math.min(1, flashAlpha)})`);
+            fGrad.addColorStop(0.2, `rgba(200, 230, 255, ${Math.min(0.8, flashAlpha * 0.6)})`);
+            fGrad.addColorStop(0.5, `rgba(150, 200, 255, ${Math.min(0.3, flashAlpha * 0.2)})`);
+            fGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = fGrad;
+            ctx.fillRect(0, 0, W, H);
+            flashAlpha -= dt * 2.5;
+        }
+
+        // ===== 冲击波 1（主波）=====
+        if (shockwaveAlpha > 0) {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, shockwaveRadius, 0, Math.PI * 2);
+            const sw1a = Math.min(1, shockwaveAlpha);
+            ctx.strokeStyle = `rgba(200, 230, 255, ${sw1a})`;
+            ctx.lineWidth = 4 * sw1a;
+            ctx.shadowColor = `rgba(150, 210, 255, ${sw1a})`;
+            ctx.shadowBlur = 30;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            shockwaveRadius += dt * 1000;
+            shockwaveAlpha -= dt * 1.8;
+        }
+
+        // ===== 冲击波 2（延迟跟随）=====
+        if (shockwave2Alpha > 0) {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, shockwave2Radius, 0, Math.PI * 2);
+            const sw2a = Math.min(1, shockwave2Alpha);
+            ctx.strokeStyle = `rgba(160, 200, 255, ${sw2a * 0.7})`;
+            ctx.lineWidth = 2.5 * sw2a;
+            ctx.shadowColor = `rgba(120, 180, 255, ${sw2a * 0.5})`;
+            ctx.shadowBlur = 20;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            shockwave2Radius += dt * 700;
+            shockwave2Alpha -= dt * 1.5;
+        }
+
+        // ===== 冲击波 3（最外层）=====
+        if (shockwave3Alpha > 0) {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, shockwave3Radius, 0, Math.PI * 2);
+            const sw3a = Math.min(1, shockwave3Alpha);
+            ctx.strokeStyle = `rgba(140, 180, 255, ${sw3a * 0.5})`;
+            ctx.lineWidth = 1.5 * sw3a;
+            ctx.stroke();
+            shockwave3Radius += dt * 500;
+            shockwave3Alpha -= dt * 1.2;
+        }
+
+        // ===== 光柱（垂直 + 水平十字）=====
+        if (lightPillarAlpha > 0) {
+            const lpa = Math.min(1, lightPillarAlpha);
+
+            // 垂直光柱
+            const vpGrad = ctx.createLinearGradient(centerX, 0, centerX, H);
+            vpGrad.addColorStop(0, 'rgba(200, 230, 255, 0)');
+            vpGrad.addColorStop(0.35, `rgba(200, 230, 255, ${0.15 * lpa})`);
+            vpGrad.addColorStop(0.5, `rgba(255, 255, 255, ${0.4 * lpa})`);
+            vpGrad.addColorStop(0.65, `rgba(200, 230, 255, ${0.15 * lpa})`);
+            vpGrad.addColorStop(1, 'rgba(200, 230, 255, 0)');
+            ctx.fillStyle = vpGrad;
+            const pillarW = 80 * lpa;
+            ctx.fillRect(centerX - pillarW / 2, 0, pillarW, H);
+
+            // 水平光线
+            const hpGrad = ctx.createLinearGradient(0, centerY, W, centerY);
+            hpGrad.addColorStop(0, 'rgba(200, 230, 255, 0)');
+            hpGrad.addColorStop(0.4, `rgba(200, 230, 255, ${0.08 * lpa})`);
+            hpGrad.addColorStop(0.5, `rgba(255, 255, 255, ${0.2 * lpa})`);
+            hpGrad.addColorStop(0.6, `rgba(200, 230, 255, ${0.08 * lpa})`);
+            hpGrad.addColorStop(1, 'rgba(200, 230, 255, 0)');
+            ctx.fillStyle = hpGrad;
+            const pillarH = 30 * lpa;
+            ctx.fillRect(0, centerY - pillarH / 2, W, pillarH);
+
+            lightPillarAlpha -= dt * 1.8;
+        }
+
+        // ===== 边缘闪白 =====
+        if (impactFlashAlpha > 0) {
+            const ifa = Math.min(1, impactFlashAlpha);
+            ctx.fillStyle = `rgba(255, 255, 255, ${ifa * 0.15})`;
+            ctx.fillRect(0, 0, W, H);
+            impactFlashAlpha -= dt * 3;
+        }
+
+        // ===== 爆发粒子 =====
+        burstParticles = burstParticles.filter(p => p.life > 0);
+        burstParticles.forEach(p => { p.update(); p.draw(ctx); });
+
+        // 恢复正常混合模式
+        ctx.globalCompositeOperation = 'source-over';
+
+        ctx.restore(); // 恢复屏幕震动的 translate
+
+        requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
+    // 不自动播放，等用户点击
+    </script>
+</body>
+</html>

@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>碎片合成动画 - 游戏UI特效</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            min-height: 100vh;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+            perspective: 1200px;
+        }
+
+        .bg-layer { position: fixed; inset: 0; z-index: 0; }
+
+        .bg-gradient {
+            position: absolute; inset: 0;
+            background: 
+                radial-gradient(ellipse 80% 50% at 50% 50%, rgba(40, 30, 20, 0.8) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 80% at 20% 80%, rgba(80, 40, 20, 0.3) 0%, transparent 50%),
+                linear-gradient(180deg, #080604 0%, #0d0a08 50%, #050403 100%);
+        }
+
+        .particles-container { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+        .main-stage { position: relative; z-index: 10; transform-style: preserve-3d; }
+
+        .container {
+            position: relative;
+            width: 492px; height: 656px;
+            transform-style: preserve-3d;
+        }
+
+        .outer-glow {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 650px; height: 800px;
+            transform: translate(-50%, -50%);
+            background: radial-gradient(ellipse, rgba(255,180,80,0.25) 0%, rgba(255,120,40,0.1) 40%, transparent 70%);
+            pointer-events: none;
+            opacity: 0;
+            filter: blur(40px);
+            transition: opacity 0.8s ease;
+            z-index: 1;
+        }
+
+        .outer-glow.active { opacity: 1; animation: outerPulse 1.5s ease-in-out infinite; }
+
+        @keyframes outerPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+            50% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+        }
+
+        /* 矩形轮廓 - 只在快拼合完成时才显示 */
+        .energy-ring {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 520px; height: 684px;
+            border: 2px solid rgba(255,200,100,0.5);
+            border-radius: 6px;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 2;
+            transition: opacity 0.5s ease;
+        }
+
+        .energy-ring.active {
+            opacity: 1;
+            animation: ringPulse 1s ease-in-out infinite;
+            box-shadow: 0 0 30px rgba(255,180,80,0.4), inset 0 0 30px rgba(255,180,80,0.1);
+        }
+
+        @keyframes ringPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.02); box-shadow: 0 0 50px rgba(255,180,80,0.6); }
+        }
+
+        /* 缝隙光效 - 只在碎片快拼合时才出现 */
+        .seam-glow {
+            position: absolute;
+            top: 0; left: 0;
+            width: 492px; height: 656px;
+            pointer-events: none;
+            z-index: 30;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .seam-glow.active { 
+            opacity: 1; 
+            animation: seamGlowIn 0.6s ease-out forwards;
+        }
+
+        @keyframes seamGlowIn {
+            0% { opacity: 0; filter: blur(10px); }
+            100% { opacity: 1; filter: blur(0); }
+        }
+
+        .seam-line {
+            position: absolute;
+            background: linear-gradient(90deg, transparent, rgba(255,220,150,0.9), rgba(255,180,100,1), rgba(255,220,150,0.9), transparent);
+            filter: blur(1.5px);
+            animation: seamPulse 1.2s ease-in-out infinite;
+        }
+
+        @keyframes seamPulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .fragment {
+            position: absolute;
+            width: 492px; height: 656px;
+            background-image: url('./492x656.jpg');
+            background-size: 492px 656px;
+            will-change: transform, opacity, filter;
+            backface-visibility: hidden;
+            transform-style: preserve-3d;
+        }
+
+        .fragment.glowing {
+            filter: 
+                drop-shadow(0 0 8px rgba(255,200,100,0.9))
+                drop-shadow(0 0 20px rgba(255,150,50,0.6))
+                drop-shadow(0 0 40px rgba(255,100,20,0.4))
+                brightness(1.15) saturate(1.2);
+        }
+
+        .fragment.scattered { opacity: 0; }
+
+        .fragment.assembling {
+            filter: 
+                drop-shadow(0 0 15px rgba(255,200,100,1))
+                drop-shadow(0 0 30px rgba(255,150,50,0.8))
+                brightness(1.3) saturate(1.3);
+        }
+
+        .fragment.assembled {
+            transform: translate3d(0, 0, 0) rotate(0deg) scale(1) !important;
+            opacity: 1 !important;
+        }
+
+        .fragment.complete {
+            filter: brightness(1) saturate(1);
+            transition: filter 1s ease-out !important;
+        }
+
+        @keyframes impactShake {
+            0%, 100% { transform: translate3d(0, 0, 0); }
+            10% { transform: translate3d(-8px, 4px, 0); }
+            20% { transform: translate3d(8px, -4px, 0); }
+            30% { transform: translate3d(-6px, 3px, 0); }
+            40% { transform: translate3d(6px, -3px, 0); }
+            50% { transform: translate3d(-4px, 2px, 0); }
+        }
+
+        .container.impact { animation: impactShake 0.5s ease-out; }
+
+        .flash-overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 100px; height: 100px;
+            transform: translate(-50%, -50%);
+            background: radial-gradient(circle, #fff 0%, rgba(255,220,150,0.8) 30%, transparent 70%);
+            border-radius: 50%;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .flash-overlay.active { animation: flashBoom 0.7s ease-out forwards; }
+
+        @keyframes flashBoom {
+            0% { opacity: 1; width: 50px; height: 50px; }
+            20% { opacity: 1; }
+            100% { opacity: 0; width: 1400px; height: 1400px; }
+        }
+
+        .shockwave {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 100px; height: 100px;
+            border: 4px solid rgba(255,200,100,0.9);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 99;
+        }
+
+        .shockwave.active { animation: shockwaveExpand 0.8s ease-out forwards; }
+
+        @keyframes shockwaveExpand {
+            0% { width: 50px; height: 50px; opacity: 1; border-width: 4px; }
+            100% { width: 1200px; height: 1200px; opacity: 0; border-width: 1px; }
+        }
+
+        .shockwave2 {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 100px; height: 100px;
+            border: 2px solid rgba(255,180,80,0.7);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 98;
+        }
+
+        .shockwave2.active { animation: shockwaveExpand 1s ease-out 0.1s forwards; }
+
+        .light-pillar {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 500px; height: 1200px;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(to top, transparent 0%, rgba(255,200,100,0.1) 20%, rgba(255,200,100,0.3) 50%, rgba(255,200,100,0.1) 80%, transparent 100%);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 3;
+        }
+
+        .light-pillar.active { animation: pillarFlash 1.2s ease-out forwards; }
+
+        @keyframes pillarFlash {
+            0% { opacity: 0; transform: translate(-50%, -50%) scaleX(0.3); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scaleX(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scaleX(1.5); }
+        }
+
+        .completion-frame {
+            position: absolute;
+            inset: -4px;
+            border: 2px solid rgba(255,200,100,0.6);
+            border-radius: 4px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .completion-frame.active { animation: frameReveal 1.5s ease-out forwards; }
+
+        @keyframes frameReveal {
+            0% { opacity: 0; transform: scale(1.1); }
+            30% { opacity: 1; box-shadow: 0 0 30px rgba(255,180,80,0.5); }
+            100% { opacity: 0; transform: scale(1); }
+        }
+
+        .btn-container { margin-top: 50px; z-index: 100; display: flex; gap: 24px; }
+
+        .btn {
+            padding: 16px 48px;
+            font-size: 15px;
+            font-weight: 500;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #fff;
+            background: linear-gradient(135deg, rgba(180,120,60,0.6) 0%, rgba(120,80,40,0.6) 100%);
+            border: 1px solid rgba(255,200,100,0.3);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.4s ease;
+        }
+
+        .btn:hover {
+            border-color: rgba(255,200,100,0.6);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(255,150,50,0.3);
+        }
+
+        .btn.secondary {
+            background: rgba(255,255,255,0.05);
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        .title {
+            position: fixed;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,200,100,0.7);
+            font-size: 14px;
+            letter-spacing: 12px;
+            text-transform: uppercase;
+            z-index: 100;
+        }
+
+        .status {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.4);
+            font-size: 12px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            z-index: 100;
+        }
+
+        .status.highlight { color: rgba(255,200,100,0.9); text-shadow: 0 0 20px rgba(255,150,50,0.5); }
+    </style>
+</head>
+<body>
+    <div class="bg-layer">
+        <div class="bg-gradient"></div>
+        <div class="particles-container" id="particles"></div>
+    </div>
+
+    <p class="title">Fragment Synthesis</p>
+
+    <div class="main-stage">
+        <div class="container" id="container">
+            <div class="outer-glow" id="outerGlow"></div>
+            <div class="energy-ring" id="energyRing"></div>
+            <div class="light-pillar" id="lightPillar"></div>
+            <div class="seam-glow" id="seamGlow"></div>
+            <div class="flash-overlay" id="flashOverlay"></div>
+            <div class="shockwave" id="shockwave"></div>
+            <div class="shockwave2" id="shockwave2"></div>
+            <div class="completion-frame" id="completionFrame"></div>
+        </div>
+    </div>
+
+    <div class="btn-container">
+        <button class="btn" id="assembleBtn">Assemble</button>
+        <button class="btn secondary" id="scatterBtn">Shatter</button>
+    </div>
+
+    <p class="status" id="status">Ready</p>
+
+    <script>
+        const fragmentPaths = [
+            "polygon(0% 0%, 28% 0%, 32% 8%, 18% 15%, 0% 12%)",
+            "polygon(28% 0%, 52% 0%, 58% 5%, 45% 18%, 32% 8%)",
+            "polygon(52% 0%, 76% 0%, 72% 12%, 58% 5%)",
+            "polygon(76% 0%, 100% 0%, 100% 18%, 85% 22%, 72% 12%)",
+            "polygon(0% 12%, 18% 15%, 22% 32%, 8% 38%, 0% 35%)",
+            "polygon(18% 15%, 32% 8%, 45% 18%, 48% 35%, 35% 42%, 22% 32%)",
+            "polygon(45% 18%, 58% 5%, 72% 12%, 75% 28%, 62% 38%, 48% 35%)",
+            "polygon(72% 12%, 85% 22%, 100% 18%, 100% 42%, 88% 45%, 75% 28%)",
+            "polygon(0% 35%, 8% 38%, 22% 32%, 25% 55%, 15% 68%, 0% 65%)",
+            "polygon(22% 32%, 35% 42%, 48% 35%, 55% 52%, 45% 70%, 28% 72%, 25% 55%)",
+            "polygon(48% 35%, 62% 38%, 75% 28%, 82% 48%, 70% 65%, 55% 52%)",
+            "polygon(75% 28%, 88% 45%, 100% 42%, 100% 70%, 85% 68%, 82% 48%)",
+            "polygon(0% 65%, 15% 68%, 25% 55%, 28% 72%, 18% 85%, 0% 85%)",
+            "polygon(0% 85%, 18% 85%, 28% 72%, 45% 70%, 55% 52%, 70% 65%, 65% 82%, 48% 100%, 0% 100%)",
+            "polygon(55% 52%, 70% 65%, 82% 48%, 85% 68%, 100% 70%, 100% 100%, 48% 100%, 65% 82%)"
+        ];
+
+        const fragmentCenters = [
+            { x: 15, y: 7 }, { x: 43, y: 8 }, { x: 65, y: 6 }, { x: 88, y: 10 },
+            { x: 10, y: 25 }, { x: 35, y: 25 }, { x: 62, y: 22 }, { x: 88, y: 32 },
+            { x: 12, y: 50 }, { x: 38, y: 50 }, { x: 65, y: 48 }, { x: 88, y: 52 },
+            { x: 14, y: 78 }, { x: 45, y: 78 }, { x: 75, y: 75 }
+        ];
+
+        const seamLines = [
+            { x: '28%', y: '0%', w: '2px', h: '15%', r: 15 },
+            { x: '52%', y: '0%', w: '2px', h: '12%', r: -10 },
+            { x: '76%', y: '0%', w: '2px', h: '18%', r: 8 },
+            { x: '18%', y: '12%', w: '2px', h: '23%', r: 5 },
+            { x: '45%', y: '8%', w: '2px', h: '30%', r: -8 },
+            { x: '72%', y: '12%', w: '2px', h: '30%', r: 5 },
+            { x: '25%', y: '32%', w: '2px', h: '25%', r: 8 },
+            { x: '55%', y: '35%', w: '2px', h: '20%', r: -5 },
+            { x: '82%', y: '28%', w: '2px', h: '25%', r: 5 },
+            { x: '28%', y: '55%', w: '2px', h: '20%', r: -8 },
+            { x: '70%', y: '52%', w: '2px', h: '20%', r: 8 }
+        ];
+
+        const container = document.getElementById('container');
+        const outerGlow = document.getElementById('outerGlow');
+        const energyRing = document.getElementById('energyRing');
+        const seamGlow = document.getElementById('seamGlow');
+        const flashOverlay = document.getElementById('flashOverlay');
+        const shockwave = document.getElementById('shockwave');
+        const shockwave2 = document.getElementById('shockwave2');
+        const completionFrame = document.getElementById('completionFrame');
+        const lightPillar = document.getElementById('lightPillar');
+        const particlesContainer = document.getElementById('particles');
+        const status = document.getElementById('status');
+        const fragments = [];
+
+        let isAnimating = false;
+        let particleInterval = null;
+
+        function createSeamLines() {
+            seamGlow.innerHTML = '';
+            seamLines.forEach((line, i) => {
+                const div = document.createElement('div');
+                div.className = 'seam-line';
+                div.style.cssText = `left:${line.x};top:${line.y};width:${line.w};height:${line.h};transform:rotate(${line.r}deg);animation-delay:${i * 0.08}s`;
+                seamGlow.appendChild(div);
+            });
+        }
+
+        function generateScatterParams(cx, cy) {
+            const dx = cx - 50, dy = cy - 50;
+            const angle = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.8;
+            const dist = 400 + Math.random() * 400;
+            return {
+                x: Math.cos(angle) * dist,
+                y: Math.sin(angle) * dist,
+                z: (Math.random() - 0.5) * 500,
+                rX: (Math.random() - 0.5) * 180,
+                rY: (Math.random() - 0.5) * 180,
+                rZ: (Math.random() - 0.5) * 720,
+                s: 0.3 + Math.random() * 0.5
+            };
+        }
+
+        function createParticle() {
+            const p = document.createElement('div');
+            const size = 2 + Math.random() * 5;
+            const hue = 30 + Math.random() * 25;
+            const rect = container.getBoundingClientRect();
+            const x = rect.left + 100 + Math.random() * 292;
+            const y = rect.top + 150 + Math.random() * 356;
+            
+            p.style.cssText = `position:absolute;width:${size}px;height:${size}px;left:${x}px;top:${y}px;background:radial-gradient(circle, hsl(${hue}, 100%, 75%) 0%, hsl(${hue}, 100%, 50%) 50%, transparent 100%);border-radius:50%;box-shadow:0 0 ${size * 2}px hsl(${hue}, 100%, 65%);pointer-events:none;`;
+            particlesContainer.appendChild(p);
+            
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 30 + Math.random() * 80;
+            p.animate([
+                { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+                { transform: `translate(${Math.cos(angle) * speed}px, ${Math.sin(angle) * speed - 50}px) scale(0)`, opacity: 0 }
+            ], { duration: 800 + Math.random() * 1200, easing: 'ease-out' }).onfinish = () => p.remove();
+        }
+
+        function startParticles() { particleInterval = setInterval(() => { for (let i = 0; i < 4; i++) createParticle(); }, 40); }
+        function stopParticles() { if (particleInterval) { clearInterval(particleInterval); particleInterval = null; } }
+
+        function createBurstParticles() {
+            const rect = container.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+            
+            for (let i = 0; i < 100; i++) {
+                setTimeout(() => {
+                    const p = document.createElement('div');
+                    const size = 3 + Math.random() * 8;
+                    const hue = 25 + Math.random() * 35;
+                    p.style.cssText = `position:absolute;width:${size}px;height:${size}px;left:${cx}px;top:${cy}px;background:radial-gradient(circle, hsl(${hue}, 100%, 85%) 0%, transparent 100%);border-radius:50%;box-shadow:0 0 ${size * 3}px hsl(${hue}, 100%, 70%);pointer-events:none;`;
+                    particlesContainer.appendChild(p);
+                    
+                    const angle = (i / 100) * Math.PI * 2 + Math.random() * 0.3;
+                    const dist = 150 + Math.random() * 350;
+                    p.animate([
+                        { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+                        { transform: `translate(calc(-50% + ${Math.cos(angle) * dist}px), calc(-50% + ${Math.sin(angle) * dist}px)) scale(0)`, opacity: 0 }
+                    ], { duration: 600 + Math.random() * 800, easing: 'ease-out' }).onfinish = () => p.remove();
+                }, i * 8);
+            }
+        }
+
+        function createFragments() {
+            fragmentPaths.forEach((path, index) => {
+                const f = document.createElement('div');
+                f.className = 'fragment scattered glowing';
+                f.style.clipPath = path;
+                f.style.zIndex = 15 - index;
+
+                const p = generateScatterParams(fragmentCenters[index].x, fragmentCenters[index].y);
+                f.style.transform = `translate3d(${p.x}px, ${p.y}px, ${p.z}px) rotateX(${p.rX}deg) rotateY(${p.rY}deg) rotateZ(${p.rZ}deg) scale(${p.s})`;
+
+                f.dataset.delay = index * 50 + Math.random() * 80;
+                f.dataset.duration = 1600 + Math.random() * 400;
+                f.dataset.index = index;
+
+                container.insertBefore(f, outerGlow);
+                fragments.push(f);
+            });
+        }
+
+        function assemble() {
+            if (isAnimating) return;
+            isAnimating = true;
+
+            status.textContent = 'Assembling...';
+            status.classList.add('highlight');
+
+            // 只开启外围光晕，不开启矩形轮廓和缝隙（那些要等碎片快拼合时才出现）
+            outerGlow.classList.add('active');
+            startParticles();
+
+            let done = 0;
+            let seamShown = false;
+
+            // 计算最长的动画时间，用于在接近完成时显示缝隙
+            const maxDelay = Math.max(...fragments.map(f => parseFloat(f.dataset.delay)));
+            const avgDuration = 1800;
+            const nearCompleteTime = maxDelay + avgDuration * 0.6; // 60%进度时显示缝隙
+
+            // 延迟显示矩形轮廓和缝隙光效（碎片快要拼合时）
+            setTimeout(() => {
+                if (!seamShown) {
+                    seamShown = true;
+                    energyRing.classList.add('active');
+                    seamGlow.classList.add('active');
+                }
+            }, nearCompleteTime);
+
+            fragments.forEach((f, i) => {
+                const delay = parseFloat(f.dataset.delay);
+                const dur = parseFloat(f.dataset.duration);
+
+                f.style.transitionDuration = `${dur}ms`;
+                f.style.transitionDelay = `${delay}ms`;
+                f.style.transitionTimingFunction = 'cubic-bezier(0.16, 1, 0.3, 1)';
+
+                setTimeout(() => {
+                    f.classList.remove('scattered');
+                    f.classList.add('assembling');
+
+                    setTimeout(() => {
+                        f.classList.remove('assembling');
+                        f.classList.add('assembled');
+                        done++;
+                        if (done === fragments.length) onComplete();
+                    }, dur * 0.85);
+                }, delay);
+            });
+        }
+
+        function onComplete() {
+            stopParticles();
+
+            container.classList.add('impact');
+            setTimeout(() => container.classList.remove('impact'), 500);
+
+            flashOverlay.classList.add('active');
+            shockwave.classList.add('active');
+            shockwave2.classList.add('active');
+            lightPillar.classList.add('active');
+            completionFrame.classList.add('active');
+            createBurstParticles();
+
+            setTimeout(() => {
+                flashOverlay.classList.remove('active');
+                shockwave.classList.remove('active');
+                shockwave2.classList.remove('active');
+                lightPillar.classList.remove('active');
+            }, 1200);
+
+            setTimeout(() => {
+                outerGlow.classList.remove('active');
+                energyRing.classList.remove('active');
+                seamGlow.classList.remove('active');
+                completionFrame.classList.remove('active');
+                
+                fragments.forEach(f => {
+                    f.classList.remove('glowing');
+                    f.classList.add('complete');
+                });
+
+                status.textContent = 'Complete';
+            }, 400);
+
+            setTimeout(() => {
+                status.classList.remove('highlight');
+                isAnimating = false;
+            }, 1500);
+        }
+
+        function scatter() {
+            if (isAnimating) return;
+            isAnimating = true;
+
+            status.textContent = 'Shattering...';
+            status.classList.add('highlight');
+
+            outerGlow.classList.remove('active');
+            energyRing.classList.remove('active');
+            seamGlow.classList.remove('active');
+            stopParticles();
+
+            fragments.forEach((f, i) => {
+                const p = generateScatterParams(fragmentCenters[i].x, fragmentCenters[i].y);
+                const delay = i * 25;
+
+                f.style.transitionDuration = '500ms';
+                f.style.transitionDelay = `${delay}ms`;
+                f.style.transitionTimingFunction = 'cubic-bezier(0.55, 0.055, 0.675, 0.19)';
+
+                setTimeout(() => {
+                    f.classList.remove('assembled', 'assembling', 'complete');
+                    f.classList.add('scattered', 'glowing');
+                    f.style.transform = `translate3d(${p.x}px, ${p.y}px, ${p.z}px) rotateX(${p.rX}deg) rotateY(${p.rY}deg) rotateZ(${p.rZ}deg) scale(${p.s})`;
+                }, delay);
+            });
+
+            setTimeout(() => {
+                status.textContent = 'Ready';
+                status.classList.remove('highlight');
+                isAnimating = false;
+            }, 800);
+        }
+
+        document.getElementById('assembleBtn').onclick = assemble;
+        document.getElementById('scatterBtn').onclick = scatter;
+
+        createSeamLines();
+        createFragments();
+        setTimeout(assemble, 1000);
+    </script>
+</body>
+</html>
