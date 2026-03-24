@@ -263,6 +263,11 @@ body {
     display: block;
 }
 
+/* 有布料 Canvas 时隐藏底层 img */
+.card > .card__front > img.cloth-hidden {
+    visibility: hidden;
+}
+
 /* 布料 Canvas 层 - 替代 APNG img */
 .card > .card__front > canvas.cloth-canvas {
     position: absolute;
@@ -743,8 +748,8 @@ document.querySelectorAll('.card').forEach(function(card) {
     var clock = new THREE.Clock();
 
     // 布料参数
-    var WIND_SPEED = 1.2;
-    var WAVE_HEIGHT = 0.35;
+    var WIND_SPEED = 1.5;
+    var WAVE_HEIGHT = 0.45;
     var WAVE_FREQ = 2.0;
 
     document.querySelectorAll('canvas.cloth-canvas').forEach(function(canvas) {
@@ -775,16 +780,10 @@ document.querySelectorAll('.card').forEach(function(card) {
             // 场景
             var scene = new THREE.Scene();
 
-            // 相机 - 正交投影，确保布料精确填满卡牌
+            // 相机 - 透视投影，让布料起伏有立体感
             var aspect = w / h;
-            var frustumH = 4.6;
-            var frustumW = frustumH * aspect;
-            var camera = new THREE.OrthographicCamera(
-                -frustumW / 2, frustumW / 2,
-                frustumH / 2, -frustumH / 2,
-                0.1, 100
-            );
-            camera.position.set(0, 0, 10);
+            var camera = new THREE.PerspectiveCamera(32, aspect, 0.1, 100);
+            camera.position.set(0, 0, 8);
             camera.lookAt(0, 0, 0);
 
             // 灯光
@@ -797,10 +796,13 @@ document.querySelectorAll('.card').forEach(function(card) {
             backLight.position.set(-2, -1, -3);
             scene.add(backLight);
 
-            // 布料几何体 PlaneGeometry(4,4,64,64)
-            var planeW = frustumW;
-            var planeH = frustumH;
-            var geometry = new THREE.PlaneGeometry(planeW, planeH, 64, 64);
+            // 布料几何体 - 48x48分段（2401顶点，兼顾效果和性能）
+            // 计算平面尺寸以填满视口
+            var vFov = 32 * Math.PI / 180;
+            var dist = 8;
+            var planeH = 2 * dist * Math.tan(vFov / 2) * 0.97;
+            var planeW = planeH * aspect * 0.97;
+            var geometry = new THREE.PlaneGeometry(planeW, planeH, 48, 48);
 
             // 保存初始顶点
             var positions = geometry.attributes.position;
@@ -809,19 +811,19 @@ document.querySelectorAll('.card').forEach(function(card) {
                 initialPos[i] = positions.array[i];
             }
 
-            // 纹理 - 使用 JPG 静态图
-            var textureLoader = new THREE.TextureLoader();
-            var cardTexture = textureLoader.load('./492x656.jpg', function(tex) {
-                tex.minFilter = THREE.LinearFilter;
-                tex.magFilter = THREE.LinearFilter;
-            });
+            // 纹理 - 使用 APNG 动画图（通过 img 元素持续更新纹理）
+            var apngImg = cardFront.querySelector('img');
+            apngImg.classList.add('cloth-hidden'); // 隐藏底层 img，避免重影
+            var cardTexture = new THREE.Texture(apngImg);
+            cardTexture.minFilter = THREE.LinearFilter;
+            cardTexture.magFilter = THREE.LinearFilter;
+            cardTexture.needsUpdate = true;
 
-            // 材质 - 半透明，让底下的 APNG 也能透出
+            // 材质
             var material = new THREE.MeshStandardMaterial({
                 map: cardTexture,
                 side: THREE.DoubleSide,
                 transparent: true,
-                opacity: 0.92,
                 roughness: 0.6,
                 metalness: 0.05
             });
@@ -836,6 +838,7 @@ document.querySelectorAll('.card').forEach(function(card) {
                 mesh: mesh,
                 geometry: geometry,
                 initialPos: initialPos,
+                texture: cardTexture,
                 w: w,
                 h: h
             });
@@ -844,9 +847,16 @@ document.querySelectorAll('.card').forEach(function(card) {
         initCloth();
     });
 
-    // 动画循环
-    function animateCloth() {
+    // 动画循环 - 节流到 30fps 减少开销
+    var frameInterval = 1000 / 30;
+    var lastFrameTime = 0;
+
+    function animateCloth(timestamp) {
         requestAnimationFrame(animateCloth);
+
+        if (timestamp - lastFrameTime < frameInterval) return;
+        lastFrameTime = timestamp;
+
         var elapsed = clock.getElapsedTime();
 
         clothInstances.forEach(function(inst) {
@@ -866,25 +876,33 @@ document.querySelectorAll('.card').forEach(function(card) {
                 var waveStr = normX * normX;
 
                 // 多层 sin/cos 波浪叠加
-                var wave1 = Math.sin(ix * freq + elapsed * speed * 2.0) * height * 0.6;
-                var wave2 = Math.cos(iy * freq * 0.8 + elapsed * speed * 1.5 + 1.0) * height * 0.4;
-                var wave3 = Math.sin((ix + iy) * freq * 0.5 + elapsed * speed * 2.5) * height * 0.2;
-                var ripple = Math.sin(ix * 8.0 + iy * 6.0 + elapsed * speed * 3.0) * height * 0.06;
+                var wave1 = Math.sin(ix * freq + elapsed * speed * 2.0) * height * 0.7;
+                var wave2 = Math.cos(iy * freq * 0.8 + elapsed * speed * 1.5 + 1.0) * height * 0.5;
+                var wave3 = Math.sin((ix + iy) * freq * 0.5 + elapsed * speed * 2.5) * height * 0.35;
+                var ripple = Math.sin(ix * 8.0 + iy * 6.0 + elapsed * speed * 3.0) * height * 0.12;
 
                 var totalWave = (wave1 + wave2 + wave3 + ripple) * waveStr;
 
-                positions.array[i * 3]     = ix + Math.sin(elapsed * speed + iy * 0.5) * 0.03 * waveStr;
-                positions.array[i * 3 + 1] = iy + Math.cos(elapsed * speed * 0.7 + ix * 0.3) * 0.02 * waveStr;
+                positions.array[i * 3]     = ix + Math.sin(elapsed * speed + iy * 0.5) * 0.04 * waveStr;
+                positions.array[i * 3 + 1] = iy + Math.cos(elapsed * speed * 0.7 + ix * 0.3) * 0.025 * waveStr;
                 positions.array[i * 3 + 2] = iz + totalWave;
             }
 
             positions.needsUpdate = true;
             inst.geometry.computeVertexNormals();
+
+            // 每 3 帧更新一次 APNG 纹理（降低 GPU 上传频率）
+            if (!inst._texFrame) inst._texFrame = 0;
+            inst._texFrame++;
+            if (inst._texFrame % 3 === 0) {
+                inst.texture.needsUpdate = true;
+            }
+
             inst.renderer.render(inst.scene, inst.camera);
         });
     }
 
-    animateCloth();
+    animateCloth(0);
 })();
 
 // ===== 陀螺仪支持（移动端倾斜手机交互）=====
