@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>碎片动画测试</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            min-height: 100vh;
+            background: #111;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: Arial, sans-serif;
+        }
+
+        h1 {
+            color: #fff;
+            margin-bottom: 30px;
+            font-weight: 300;
+        }
+
+        .container {
+            position: relative;
+            width: 492px;
+            height: 656px;
+        }
+
+        .fragment {
+            position: absolute;
+            width: 492px;
+            height: 656px;
+            background: url('./492x656.jpg') no-repeat 0 0;
+            background-size: 492px 656px;
+            opacity: 0;
+            transition: all 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .fragment.show {
+            opacity: 1;
+            transform: translate(0, 0) rotate(0deg) scale(1) !important;
+        }
+
+        .btn {
+            margin-top: 40px;
+            padding: 15px 50px;
+            font-size: 16px;
+            color: #fff;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <h1>碎片合成动画</h1>
+    
+    <div class="container" id="container"></div>
+    
+    <button class="btn" id="playBtn">▶ 播放动画</button>
+
+    <script>
+        // 15个碎片的clip-path
+        const paths = [
+            "polygon(0% 0%, 28% 0%, 32% 8%, 18% 15%, 0% 12%)",
+            "polygon(28% 0%, 52% 0%, 58% 5%, 45% 18%, 32% 8%)",
+            "polygon(52% 0%, 76% 0%, 72% 12%, 58% 5%)",
+            "polygon(76% 0%, 100% 0%, 100% 18%, 85% 22%, 72% 12%)",
+            "polygon(0% 12%, 18% 15%, 22% 32%, 8% 38%, 0% 35%)",
+            "polygon(18% 15%, 32% 8%, 45% 18%, 48% 35%, 35% 42%, 22% 32%)",
+            "polygon(45% 18%, 58% 5%, 72% 12%, 75% 28%, 62% 38%, 48% 35%)",
+            "polygon(72% 12%, 85% 22%, 100% 18%, 100% 42%, 88% 45%, 75% 28%)",
+            "polygon(0% 35%, 8% 38%, 22% 32%, 25% 55%, 15% 68%, 0% 65%)",
+            "polygon(22% 32%, 35% 42%, 48% 35%, 55% 52%, 45% 70%, 28% 72%, 25% 55%)",
+            "polygon(48% 35%, 62% 38%, 75% 28%, 82% 48%, 70% 65%, 55% 52%)",
+            "polygon(75% 28%, 88% 45%, 100% 42%, 100% 70%, 85% 68%, 82% 48%)",
+            "polygon(0% 65%, 15% 68%, 25% 55%, 28% 72%, 18% 85%, 0% 85%)",
+            "polygon(0% 85%, 18% 85%, 28% 72%, 45% 70%, 55% 52%, 70% 65%, 65% 82%, 48% 100%, 0% 100%)",
+            "polygon(55% 52%, 70% 65%, 82% 48%, 85% 68%, 100% 70%, 100% 100%, 48% 100%, 65% 82%)"
+        ];
+
+        const container = document.getElementById('container');
+        const fragments = [];
+
+        // 创建碎片
+        paths.forEach((path, i) => {
+            const div = document.createElement('div');
+            div.className = 'fragment';
+            div.style.clipPath = path;
+            
+            // 随机散开位置
+            const x = (Math.random() - 0.5) * 800;
+            const y = (Math.random() - 0.5) * 600;
+            const r = (Math.random() - 0.5) * 360;
+            const s = 0.3 + Math.random() * 0.5;
+            
+            div.style.transform = `translate(${x}px, ${y}px) rotate(${r}deg) scale(${s})`;
+            div.style.transitionDelay = `${i * 80}ms`;
+            
+            container.appendChild(div);
+            fragments.push(div);
+        });
+
+        // 播放动画
+        let isShown = false;
+        document.getElementById('playBtn').onclick = function() {
+            if (!isShown) {
+                fragments.forEach(f => f.classList.add('show'));
+                this.textContent = '↺ 重置';
+                isShown = true;
+            } else {
+                fragments.forEach((f, i) => {
+                    f.classList.remove('show');
+                    const x = (Math.random() - 0.5) * 800;
+                    const y = (Math.random() - 0.5) * 600;
+                    const r = (Math.random() - 0.5) * 360;
+                    const s = 0.3 + Math.random() * 0.5;
+                    f.style.transform = `translate(${x}px, ${y}px) rotate(${r}deg) scale(${s})`;
+                });
+                this.textContent = '▶ 播放动画';
+                isShown = false;
+            }
+        };
+
+        console.log('页面加载完成，碎片数量:', fragments.length);
+    </script>
+</body>
+</html>

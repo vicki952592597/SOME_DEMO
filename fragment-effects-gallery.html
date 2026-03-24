@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>碎片动效大师集</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a0a12 0%, #1a1a2e 50%, #0a0a12 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            padding: 20px;
+            background: rgba(10,10,18,0.9);
+            z-index: 100;
+        }
+
+        .nav-btn {
+            padding: 10px 24px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.5);
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .nav-btn:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+        .nav-btn.active { color: #fff; background: linear-gradient(135deg, #6366f1, #ec4899); border-color: transparent; }
+
+        .title {
+            color: rgba(255,255,255,0.4);
+            font-size: 12px;
+            font-weight: 400;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            margin-bottom: 40px;
+            margin-top: 80px;
+        }
+
+        .stage { position: relative; }
+
+        .particles {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 800px;
+            height: 900px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .container {
+            position: relative;
+            width: 492px;
+            height: 656px;
+        }
+
+        .outer-glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 600px;
+            height: 750px;
+            transform: translate(-50%, -50%);
+            background: radial-gradient(ellipse, rgba(255,200,100,0.3) 0%, rgba(255,150,50,0.1) 40%, transparent 70%);
+            pointer-events: none;
+            opacity: 0;
+            filter: blur(30px);
+            transition: opacity 1s ease;
+            z-index: 1;
+        }
+
+        .outer-glow.active { opacity: 1; animation: outerPulse 2s ease-in-out infinite; }
+
+        @keyframes outerPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+            50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+        }
+
+        .seam-glow {
+            position: absolute;
+            top: 0; left: 0;
+            width: 492px;
+            height: 656px;
+            pointer-events: none;
+            z-index: 30;
+            opacity: 0;
+            mix-blend-mode: screen;
+        }
+
+        .seam-glow.active { opacity: 1; }
+
+        .seam-line {
+            position: absolute;
+            background: linear-gradient(90deg, transparent, rgba(255,220,150,0.8), rgba(255,180,100,1), rgba(255,220,150,0.8), transparent);
+            filter: blur(2px);
+            animation: seamPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes seamPulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .fragment {
+            position: absolute;
+            width: 492px;
+            height: 656px;
+            background: url('./492x656.jpg') no-repeat 0 0;
+            background-size: 492px 656px;
+            will-change: transform, opacity, filter;
+            z-index: 10;
+        }
+
+        .fragment.glowing {
+            filter: drop-shadow(0 0 15px rgba(255,200,100,0.8)) 
+                    drop-shadow(0 0 30px rgba(255,150,50,0.5))
+                    brightness(1.2) saturate(1.3);
+        }
+
+        .fragment.hidden { opacity: 0; }
+        .fragment.show { opacity: 1; }
+        .fragment.complete { filter: none; transition: filter 0.8s ease-out !important; }
+
+        .btn-group { display: flex; gap: 16px; margin-top: 50px; z-index: 60; }
+
+        .btn {
+            padding: 14px 40px;
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #fff;
+            background: linear-gradient(135deg, rgba(99,102,241,0.8), rgba(236,72,153,0.8));
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(99,102,241,0.4); }
+        .btn.secondary { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); }
+
+        .flash {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 100px; height: 100px;
+            transform: translate(-50%, -50%);
+            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,220,150,0.8) 30%, transparent 70%);
+            border-radius: 50%;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .flash.active { animation: flashBoom 0.8s ease-out forwards; }
+
+        @keyframes flashBoom {
+            0% { opacity: 1; width: 50px; height: 50px; }
+            30% { opacity: 1; }
+            100% { opacity: 0; width: 1200px; height: 1200px; }
+        }
+
+        .shockwave {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 100px; height: 100px;
+            border: 3px solid rgba(255,200,100,0.8);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 99;
+        }
+
+        .shockwave.active { animation: shockwaveExpand 1s ease-out forwards; }
+
+        @keyframes shockwaveExpand {
+            0% { width: 100px; height: 100px; opacity: 1; border-width: 3px; }
+            100% { width: 1000px; height: 1000px; opacity: 0; border-width: 1px; }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translate(0, 0); }
+            10% { transform: translate(-5px, -3px); }
+            20% { transform: translate(5px, 3px); }
+            30% { transform: translate(-4px, 2px); }
+            40% { transform: translate(4px, -2px); }
+            50% { transform: translate(-3px, 3px); }
+        }
+
+        .container.shake { animation: shake 0.5s ease-out; }
+
+        .energy-ring {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 520px; height: 680px;
+            border: 2px solid rgba(255,200,100,0.4);
+            border-radius: 8px;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 25;
+        }
+
+        .energy-ring.active { opacity: 1; animation: energyPulse 1s ease-in-out infinite; }
+
+        @keyframes energyPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; box-shadow: 0 0 20px rgba(255,200,100,0.3); }
+            50% { transform: translate(-50%, -50%) scale(1.02); opacity: 0.8; box-shadow: 0 0 40px rgba(255,200,100,0.5); }
+        }
+
+        .info { position: fixed; bottom: 30px; color: rgba(255,255,255,0.3); font-size: 12px; letter-spacing: 2px; z-index: 60; }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <button class="nav-btn active" data-effect="crystal">Crystal</button>
+        <button class="nav-btn" data-effect="vortex">Vortex</button>
+        <button class="nav-btn" data-effect="quantum">Quantum</button>
+        <button class="nav-btn" data-effect="origami">Origami</button>
+        <button class="nav-btn" data-effect="magnetic">Magnetic</button>
+        <button class="nav-btn" data-effect="time">Time</button>
+    </nav>
+
+    <h2 class="title" id="effectTitle">Crystal Shatter · 水晶碎裂</h2>
+
+    <div class="stage">
+        <div class="particles" id="particles"></div>
+        <div class="container" id="container">
+            <div class="outer-glow" id="outerGlow"></div>
+            <div class="energy-ring" id="energyRing"></div>
+            <div class="seam-glow" id="seamGlow"></div>
+            <div class="flash" id="flash"></div>
+            <div class="shockwave" id="shockwave"></div>
+        </div>
+    </div>
+
+    <div class="btn-group">
+        <button class="btn" id="playBtn">▶ Play</button>
+        <button class="btn secondary" id="resetBtn">↺ Reset</button>
+    </div>
+
+    <p class="info">点击 Play 播放动画</p>
+
+    <script>
+        const paths = [
+            "polygon(0% 0%, 28% 0%, 32% 8%, 18% 15%, 0% 12%)",
+            "polygon(28% 0%, 52% 0%, 58% 5%, 45% 18%, 32% 8%)",
+            "polygon(52% 0%, 76% 0%, 72% 12%, 58% 5%)",
+            "polygon(76% 0%, 100% 0%, 100% 18%, 85% 22%, 72% 12%)",
+            "polygon(0% 12%, 18% 15%, 22% 32%, 8% 38%, 0% 35%)",
+            "polygon(18% 15%, 32% 8%, 45% 18%, 48% 35%, 35% 42%, 22% 32%)",
+            "polygon(45% 18%, 58% 5%, 72% 12%, 75% 28%, 62% 38%, 48% 35%)",
+            "polygon(72% 12%, 85% 22%, 100% 18%, 100% 42%, 88% 45%, 75% 28%)",
+            "polygon(0% 35%, 8% 38%, 22% 32%, 25% 55%, 15% 68%, 0% 65%)",
+            "polygon(22% 32%, 35% 42%, 48% 35%, 55% 52%, 45% 70%, 28% 72%, 25% 55%)",
+            "polygon(48% 35%, 62% 38%, 75% 28%, 82% 48%, 70% 65%, 55% 52%)",
+            "polygon(75% 28%, 88% 45%, 100% 42%, 100% 70%, 85% 68%, 82% 48%)",
+            "polygon(0% 65%, 15% 68%, 25% 55%, 28% 72%, 18% 85%, 0% 85%)",
+            "polygon(0% 85%, 18% 85%, 28% 72%, 45% 70%, 55% 52%, 70% 65%, 65% 82%, 48% 100%, 0% 100%)",
+            "polygon(55% 52%, 70% 65%, 82% 48%, 85% 68%, 100% 70%, 100% 100%, 48% 100%, 65% 82%)"
+        ];
+
+        const centers = [
+            {x:15,y:7}, {x:43,y:8}, {x:65,y:6}, {x:88,y:10},
+            {x:10,y:25}, {x:35,y:25}, {x:62,y:22}, {x:88,y:32},
+            {x:12,y:50}, {x:38,y:50}, {x:65,y:48}, {x:88,y:52},
+            {x:8,y:75}, {x:35,y:80}, {x:75,y:75}
+        ];
+
+        const seamLines = [
+            { x: '28%', y: '0%', w: '2px', h: '15%', r: 15 },
+            { x: '52%', y: '0%', w: '2px', h: '12%', r: -10 },
+            { x: '76%', y: '0%', w: '2px', h: '18%', r: 8 },
+            { x: '18%', y: '12%', w: '2px', h: '23%', r: 5 },
+            { x: '45%', y: '8%', w: '2px', h: '30%', r: -8 },
+            { x: '72%', y: '12%', w: '2px', h: '30%', r: 5 },
+            { x: '25%', y: '32%', w: '2px', h: '25%', r: 8 },
+            { x: '55%', y: '35%', w: '2px', h: '20%', r: -5 },
+            { x: '82%', y: '28%', w: '2px', h: '25%', r: 5 },
+            { x: '28%', y: '55%', w: '2px', h: '20%', r: -8 },
+            { x: '70%', y: '52%', w: '2px', h: '20%', r: 8 }
+        ];
+
+        const effects = {
+            crystal: { title: 'Crystal Shatter · 水晶碎裂', easing: 'cubic-bezier(0.16, 1, 0.3, 1)', duration: 1600,
+                scatter: (c, i) => ({ x: (c.x - 50) * 12 + (Math.random() - 0.5) * 200, y: (c.y - 50) * 12 + (Math.random() - 0.5) * 200, r: (Math.random() - 0.5) * 180, s: 0.3 + Math.random() * 0.4 }),
+                delay: (i) => i * 60 + Math.random() * 40 },
+            vortex: { title: 'Spiral Vortex · 螺旋漩涡', easing: 'cubic-bezier(0.23, 1, 0.32, 1)', duration: 2000,
+                scatter: (c, i) => { const angle = (i / 15) * Math.PI * 4; const dist = 500 + Math.random() * 200; return { x: Math.cos(angle) * dist, y: Math.sin(angle) * dist, r: angle * (180 / Math.PI) + 720, s: 0.2 }; },
+                delay: (i) => i * 100 },
+            quantum: { title: 'Quantum Teleport · 量子传送', easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)', duration: 1000,
+                scatter: (c, i) => ({ x: (Math.random() - 0.5) * 1200, y: (Math.random() - 0.5) * 800, r: Math.random() * 180, s: Math.random() * 0.5 }),
+                delay: (i) => Math.random() * 300 },
+            origami: { title: 'Origami Unfold · 折纸展开', easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)', duration: 1400,
+                scatter: (c, i) => { const row = Math.floor(i / 4), col = i % 4; return { x: (col - 1.5) * 80, y: (row - 1.5) * 100 - 200, r: (row - 1.5) * 45, s: 0.6 }; },
+                delay: (i) => { const row = Math.floor(i / 4), col = i % 4; return (Math.abs(row - 1.5) + Math.abs(col - 1.5)) * 120; } },
+            magnetic: { title: 'Magnetic Pull · 磁力吸附', easing: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)', duration: 1800,
+                scatter: (c, i) => { const angle = Math.random() * Math.PI * 2, dist = 500 + Math.random() * 300; return { x: Math.cos(angle) * dist, y: Math.sin(angle) * dist, r: (Math.random() - 0.5) * 90, s: 0.4 + Math.random() * 0.4 }; },
+                delay: (i) => i * 50 },
+            time: { title: 'Time Shards · 时间碎片', easing: 'cubic-bezier(0.25, 1, 0.5, 1)', duration: 2200,
+                scatter: (c, i) => ({ x: (c.x - 50) * 15, y: -600 - Math.random() * 300, r: (Math.random() - 0.5) * 60, s: 0.1 + Math.random() * 0.3 }),
+                delay: (i) => i * 120 }
+        };
+
+        const container = document.getElementById('container');
+        const outerGlow = document.getElementById('outerGlow');
+        const energyRing = document.getElementById('energyRing');
+        const seamGlow = document.getElementById('seamGlow');
+        const flash = document.getElementById('flash');
+        const shockwave = document.getElementById('shockwave');
+        const particlesContainer = document.getElementById('particles');
+        const playBtn = document.getElementById('playBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const effectTitle = document.getElementById('effectTitle');
+
+        let fragments = [];
+        let currentEffect = 'crystal';
+        let isPlaying = false;
+        let isAssembled = false;
+        let particleInterval = null;
+
+        function createSeamLines() {
+            seamGlow.innerHTML = '';
+            seamLines.forEach((line, i) => {
+                const div = document.createElement('div');
+                div.className = 'seam-line';
+                div.style.cssText = `left:${line.x};top:${line.y};width:${line.w};height:${line.h};transform:rotate(${line.r}deg);animation-delay:${i * 0.1}s`;
+                seamGlow.appendChild(div);
+            });
+        }
+
+        function createParticle() {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            const size = 2 + Math.random() * 6;
+            const x = 200 + Math.random() * 400;
+            const y = 250 + Math.random() * 400;
+            const hue = 30 + Math.random() * 30;
+            p.style.cssText = `width:${size}px;height:${size}px;left:${x}px;top:${y}px;background:radial-gradient(circle, hsl(${hue}, 100%, 70%) 0%, hsl(${hue}, 100%, 50%) 50%, transparent 100%);box-shadow:0 0 ${size * 2}px hsl(${hue}, 100%, 60%)`;
+            particlesContainer.appendChild(p);
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 50 + Math.random() * 100;
+            p.animate([
+                { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+                { transform: `translate(${Math.cos(angle) * speed}px, ${Math.sin(angle) * speed}px) scale(0)`, opacity: 0 }
+            ], { duration: 1000 + Math.random() * 1500, easing: 'ease-out' }).onfinish = () => p.remove();
+        }
+
+        function startParticles() { particleInterval = setInterval(() => { for (let i = 0; i < 3; i++) createParticle(); }, 50); }
+        function stopParticles() { if (particleInterval) { clearInterval(particleInterval); particleInterval = null; } }
+
+        function createBurstParticles() {
+            for (let i = 0; i < 80; i++) {
+                setTimeout(() => {
+                    const p = document.createElement('div');
+                    p.className = 'particle';
+                    const size = 3 + Math.random() * 8;
+                    const hue = 30 + Math.random() * 40;
+                    p.style.cssText = `width:${size}px;height:${size}px;left:400px;top:450px;background:radial-gradient(circle, hsl(${hue}, 100%, 80%) 0%, transparent 100%);box-shadow:0 0 ${size * 3}px hsl(${hue}, 100%, 70%)`;
+                    particlesContainer.appendChild(p);
+                    const angle = (i / 80) * Math.PI * 2;
+                    const dist = 200 + Math.random() * 300;
+                    p.animate([
+                        { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+                        { transform: `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px) scale(0)`, opacity: 0 }
+                    ], { duration: 800 + Math.random() * 600, easing: 'ease-out' }).onfinish = () => p.remove();
+                }, i * 10);
+            }
+        }
+
+        function createFragments() {
+            fragments.forEach(f => f.remove());
+            fragments = [];
+            const effect = effects[currentEffect];
+            paths.forEach((path, i) => {
+                const div = document.createElement('div');
+                div.className = 'fragment hidden glowing';
+                div.style.clipPath = path;
+                div.style.zIndex = 10 + i;
+                const scatter = effect.scatter(centers[i], i);
+                div.style.transform = `translate(${scatter.x}px, ${scatter.y}px) rotate(${scatter.r}deg) scale(${scatter.s})`;
+                div.style.transition = `transform ${effect.duration}ms ${effect.easing}, opacity ${effect.duration}ms ease, filter 0.5s ease`;
+                div.style.transitionDelay = `${effect.delay(i)}ms`;
+                div.dataset.scatter = JSON.stringify(scatter);
+                container.insertBefore(div, outerGlow);
+                fragments.push(div);
+            });
+        }
+
+        function play() {
+            if (isPlaying) return;
+            if (isAssembled) { reset(); return; }
+            isPlaying = true;
+            outerGlow.classList.add('active');
+            energyRing.classList.add('active');
+            seamGlow.classList.add('active');
+            startParticles();
+            const effect = effects[currentEffect];
+            fragments.forEach(f => {
+                setTimeout(() => {
+                    f.classList.remove('hidden');
+                    f.classList.add('show');
+                    f.style.transform = 'translate(0, 0) rotate(0deg) scale(1)';
+                }, 10);
+            });
+            const maxDelay = Math.max(...paths.map((_, i) => effect.delay(i)));
+            const totalTime = maxDelay + effect.duration;
+            setTimeout(() => {
+                stopParticles();
+                container.classList.add('shake');
+                setTimeout(() => container.classList.remove('shake'), 500);
+                flash.classList.add('active');
+                shockwave.classList.add('active');
+                createBurstParticles();
+                setTimeout(() => { flash.classList.remove('active'); shockwave.classList.remove('active'); }, 1000);
+                setTimeout(() => {
+                    outerGlow.classList.remove('active');
+                    energyRing.classList.remove('active');
+                    seamGlow.classList.remove('active');
+                    fragments.forEach(f => { f.classList.remove('glowing'); f.classList.add('complete'); });
+                }, 300);
+                isPlaying = false;
+                isAssembled = true;
+                playBtn.textContent = '↺ Shatter';
+            }, totalTime);
+        }
+
+        function reset() {
+            isPlaying = true;
+            outerGlow.classList.remove('active');
+            energyRing.classList.remove('active');
+            seamGlow.classList.remove('active');
+            stopParticles();
+            const effect = effects[currentEffect];
+            fragments.forEach((f, i) => {
+                const scatter = effect.scatter(centers[i], i);
+                f.classList.remove('complete');
+                f.classList.add('glowing');
+                f.style.transition = 'transform 600ms cubic-bezier(0.55, 0.055, 0.675, 0.19), opacity 400ms ease, filter 0.3s ease';
+                f.style.transitionDelay = `${i * 20}ms`;
+                setTimeout(() => {
+                    f.style.transform = `translate(${scatter.x}px, ${scatter.y}px) rotate(${scatter.r}deg) scale(${scatter.s})`;
+                    f.classList.remove('show');
+                    f.classList.add('hidden');
+                }, 10);
+            });
+            setTimeout(() => {
+                fragments.forEach((f, i) => {
+                    f.style.transition = `transform ${effect.duration}ms ${effect.easing}, opacity ${effect.duration}ms ease, filter 0.5s ease`;
+                    f.style.transitionDelay = `${effect.delay(i)}ms`;
+                });
+                isPlaying = false;
+                isAssembled = false;
+                playBtn.textContent = '▶ Play';
+            }, 800);
+        }
+
+        function switchEffect(name) {
+            if (isPlaying) return;
+            currentEffect = name;
+            effectTitle.textContent = effects[name].title;
+            isAssembled = false;
+            playBtn.textContent = '▶ Play';
+            outerGlow.classList.remove('active');
+            energyRing.classList.remove('active');
+            seamGlow.classList.remove('active');
+            stopParticles();
+            createFragments();
+        }
+
+        playBtn.onclick = play;
+        resetBtn.onclick = reset;
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.onclick = function() {
+                document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                switchEffect(this.dataset.effect);
+            };
+        });
+
+        createSeamLines();
+        createFragments();
+    </script>
+</body>
+</html>

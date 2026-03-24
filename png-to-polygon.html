@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PNG碎片 → Polygon 转换工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            padding: 40px;
+        }
+
+        h1 {
+            text-align: center;
+            font-weight: 300;
+            letter-spacing: 4px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: rgba(255,255,255,0.5);
+            font-size: 14px;
+            margin-bottom: 40px;
+        }
+
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+        }
+
+        .panel {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .panel-title {
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.6);
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* 上传区域 */
+        .upload-zone {
+            border: 2px dashed rgba(255,255,255,0.2);
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .upload-zone:hover {
+            border-color: rgba(100, 180, 255, 0.5);
+            background: rgba(100, 180, 255, 0.05);
+        }
+
+        .upload-zone.dragover {
+            border-color: rgba(100, 180, 255, 0.8);
+            background: rgba(100, 180, 255, 0.1);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .upload-text {
+            color: rgba(255,255,255,0.6);
+            font-size: 14px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        /* 参数设置 */
+        .settings {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .setting-item {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .setting-item label {
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .setting-item input {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+            padding: 10px 14px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .setting-item input:focus {
+            outline: none;
+            border-color: rgba(100, 180, 255, 0.5);
+        }
+
+        /* 图片列表 */
+        .image-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .image-item {
+            position: relative;
+            aspect-ratio: 3/4;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .image-item:hover {
+            border-color: rgba(100, 180, 255, 0.5);
+        }
+
+        .image-item.selected {
+            border-color: #4facfe;
+        }
+
+        .image-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .image-item .index {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .image-item .remove {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(255,50,50,0.8);
+            color: #fff;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            cursor: pointer;
+        }
+
+        .image-item:hover .remove {
+            opacity: 1;
+        }
+
+        /* 预览区域 */
+        .preview-area {
+            position: relative;
+            background: repeating-conic-gradient(rgba(255,255,255,0.03) 0% 25%, transparent 0% 50%) 50% / 20px 20px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            margin-bottom: 20px;
+        }
+
+        .preview-canvas {
+            max-width: 100%;
+            max-height: 500px;
+        }
+
+        /* 输出区域 */
+        .output-area {
+            background: rgba(0,0,0,0.4);
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 12px;
+            line-height: 1.8;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .output-area .polygon-item {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .output-area .polygon-index {
+            color: #4facfe;
+        }
+
+        .output-area .polygon-code {
+            color: #a8e6cf;
+        }
+
+        /* 按钮 */
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 14px 24px;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            color: #fff;
+            background: linear-gradient(135deg, rgba(79, 172, 254, 0.6) 0%, rgba(0, 242, 254, 0.4) 100%);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(79, 172, 254, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn.secondary {
+            background: rgba(255,255,255,0.1);
+        }
+
+        /* 进度条 */
+        .progress-bar {
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            margin-top: 16px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-bar.active {
+            display: block;
+        }
+
+        .progress-bar .progress {
+            height: 100%;
+            background: linear-gradient(90deg, #4facfe, #00f2fe);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        /* 提示信息 */
+        .tips {
+            background: rgba(79, 172, 254, 0.1);
+            border-left: 3px solid #4facfe;
+            padding: 12px 16px;
+            border-radius: 0 8px 8px 0;
+            margin-top: 20px;
+            font-size: 13px;
+            color: rgba(255,255,255,0.7);
+            line-height: 1.6;
+        }
+
+        .tips strong {
+            color: #4facfe;
+        }
+    </style>
+</head>
+<body>
+    <h1>PNG → Polygon 转换工具</h1>
+    <p class="subtitle">上传PNG碎片图片，自动提取轮廓生成 clip-path polygon 坐标</p>
+
+    <div class="main-container">
+        <!-- 左侧面板 -->
+        <div class="panel">
+            <h2 class="panel-title">📁 上传碎片图片</h2>
+            
+            <div class="upload-zone" id="uploadZone">
+                <div class="upload-icon">📤</div>
+                <p class="upload-text">点击或拖拽PNG图片到此处<br>支持批量上传多个碎片</p>
+            </div>
+            <input type="file" id="fileInput" accept="image/png" multiple>
+
+            <div class="settings">
+                <div class="setting-item">
+                    <label>画布宽度 (px)</label>
+                    <input type="number" id="canvasWidth" value="492">
+                </div>
+                <div class="setting-item">
+                    <label>画布高度 (px)</label>
+                    <input type="number" id="canvasHeight" value="656">
+                </div>
+                <div class="setting-item">
+                    <label>简化精度 (顶点数)</label>
+                    <input type="number" id="simplifyPoints" value="12" min="4" max="50">
+                </div>
+                <div class="setting-item">
+                    <label>透明阈值 (0-255)</label>
+                    <input type="number" id="alphaThreshold" value="128" min="1" max="255">
+                </div>
+            </div>
+
+            <div class="image-list" id="imageList"></div>
+
+            <div class="btn-group">
+                <button class="btn" id="processBtn" disabled>🔄 开始转换</button>
+                <button class="btn secondary" id="clearBtn">🗑️ 清空</button>
+            </div>
+
+            <div class="progress-bar" id="progressBar">
+                <div class="progress" id="progress"></div>
+            </div>
+
+            <div class="tips">
+                <strong>💡 提示：</strong><br>
+                • PNG图片应该是透明背景的碎片形状<br>
+                • 工具会自动检测非透明区域的轮廓<br>
+                • 简化精度控制输出的顶点数量（越多越精确）<br>
+                • 输出坐标为百分比，可直接用于 clip-path
+            </div>
+        </div>
+
+        <!-- 右侧面板 -->
+        <div class="panel">
+            <h2 class="panel-title">📐 预览 & 输出</h2>
+            
+            <div class="preview-area" id="previewArea">
+                <canvas id="previewCanvas" class="preview-canvas"></canvas>
+            </div>
+
+            <h3 class="panel-title" style="margin-top: 20px;">📋 Polygon 代码</h3>
+            <div class="output-area" id="outputArea">
+                // 转换后的 polygon 代码将显示在这里
+                // 可直接复制到 fragmentPaths 数组中使用
+            </div>
+
+            <div class="btn-group">
+                <button class="btn" id="copyBtn" disabled>📋 复制代码</button>
+                <button class="btn secondary" id="copyArrayBtn" disabled>📦 复制为数组</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // PNG 轮廓提取 & Polygon 生成工具
+        // ============================================
+        
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const imageList = document.getElementById('imageList');
+        const processBtn = document.getElementById('processBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        const copyArrayBtn = document.getElementById('copyArrayBtn');
+        const progressBar = document.getElementById('progressBar');
+        const progress = document.getElementById('progress');
+        const previewCanvas = document.getElementById('previewCanvas');
+        const outputArea = document.getElementById('outputArea');
+        
+        const ctx = previewCanvas.getContext('2d');
+        
+        let uploadedImages = [];
+        let polygonResults = [];
+
+        // 上传区域事件
+        uploadZone.addEventListener('click', () => fileInput.click());
+        
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+        
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+        
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        // 处理上传的文件
+        function handleFiles(files) {
+            Array.from(files).forEach(file => {
+                if (file.type === 'image/png') {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            uploadedImages.push({
+                                name: file.name,
+                                img: img,
+                                dataUrl: e.target.result
+                            });
+                            updateImageList();
+                            processBtn.disabled = false;
+                        };
+                        img.src = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        // 更新图片列表显示
+        function updateImageList() {
+            imageList.innerHTML = uploadedImages.map((item, index) => `
+                <div class="image-item" data-index="${index}">
+                    <img src="${item.dataUrl}" alt="${item.name}">
+                    <span class="index">#${index + 1}</span>
+                    <span class="remove" onclick="removeImage(${index})">×</span>
+                </div>
+            `).join('');
+        }
+
+        // 移除图片
+        window.removeImage = function(index) {
+            uploadedImages.splice(index, 1);
+            updateImageList();
+            if (uploadedImages.length === 0) {
+                processBtn.disabled = true;
+            }
+        };
+
+        // 清空所有
+        clearBtn.addEventListener('click', () => {
+            uploadedImages = [];
+            polygonResults = [];
+            updateImageList();
+            processBtn.disabled = true;
+            copyBtn.disabled = true;
+            copyArrayBtn.disabled = true;
+            outputArea.innerHTML = '// 转换后的 polygon 代码将显示在这里';
+            ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+        });
+
+        // 开始转换
+        processBtn.addEventListener('click', async () => {
+            const canvasWidth = parseInt(document.getElementById('canvasWidth').value);
+            const canvasHeight = parseInt(document.getElementById('canvasHeight').value);
+            const simplifyPoints = parseInt(document.getElementById('simplifyPoints').value);
+            const alphaThreshold = parseInt(document.getElementById('alphaThreshold').value);
+
+            previewCanvas.width = canvasWidth;
+            previewCanvas.height = canvasHeight;
+            
+            progressBar.classList.add('active');
+            polygonResults = [];
+
+            for (let i = 0; i < uploadedImages.length; i++) {
+                progress.style.width = ((i + 1) / uploadedImages.length * 100) + '%';
+                
+                const item = uploadedImages[i];
+                const polygon = await extractPolygon(item.img, canvasWidth, canvasHeight, simplifyPoints, alphaThreshold);
+                polygonResults.push({
+                    name: item.name,
+                    polygon: polygon
+                });
+                
+                await new Promise(r => setTimeout(r, 50)); // 短暂延迟让UI更新
+            }
+
+            // 绘制预览
+            drawPreview(canvasWidth, canvasHeight);
+            
+            // 输出代码
+            displayOutput();
+            
+            progressBar.classList.remove('active');
+            copyBtn.disabled = false;
+            copyArrayBtn.disabled = false;
+        });
+
+        // 提取PNG轮廓并转为polygon
+        async function extractPolygon(img, canvasWidth, canvasHeight, maxPoints, alphaThreshold) {
+            // 创建临时canvas读取图片像素
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = img.width;
+            tempCanvas.height = img.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(img, 0, 0);
+            
+            const imageData = tempCtx.getImageData(0, 0, img.width, img.height);
+            const data = imageData.data;
+            
+            // 提取轮廓点
+            const contourPoints = extractContour(data, img.width, img.height, alphaThreshold);
+            
+            // 简化轮廓（减少顶点数）
+            const simplifiedPoints = simplifyContour(contourPoints, maxPoints);
+            
+            // 转换为百分比坐标
+            const percentPoints = simplifiedPoints.map(p => ({
+                x: (p.x / img.width * 100).toFixed(1),
+                y: (p.y / img.height * 100).toFixed(1)
+            }));
+            
+            // 生成polygon字符串
+            const polygonStr = 'polygon(' + percentPoints.map(p => `${p.x}% ${p.y}%`).join(', ') + ')';
+            
+            return {
+                points: percentPoints,
+                polygonStr: polygonStr
+            };
+        }
+
+        // 使用边缘检测提取轮廓点
+        function extractContour(data, width, height, alphaThreshold) {
+            const points = [];
+            
+            // 找到所有边缘像素（相邻像素透明度不同的位置）
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const alpha = data[(y * width + x) * 4 + 3];
+                    if (alpha >= alphaThreshold) {
+                        // 检查是否是边缘（周围有透明像素）
+                        if (isEdgePixel(data, x, y, width, height, alphaThreshold)) {
+                            points.push({ x, y });
+                        }
+                    }
+                }
+            }
+            
+            // 按角度排序，形成封闭轮廓
+            if (points.length > 0) {
+                const centerX = points.reduce((sum, p) => sum + p.x, 0) / points.length;
+                const centerY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+                
+                points.sort((a, b) => {
+                    const angleA = Math.atan2(a.y - centerY, a.x - centerX);
+                    const angleB = Math.atan2(b.y - centerY, b.x - centerX);
+                    return angleA - angleB;
+                });
+            }
+            
+            return points;
+        }
+
+        // 检查是否是边缘像素
+        function isEdgePixel(data, x, y, width, height, threshold) {
+            const directions = [[-1,0], [1,0], [0,-1], [0,1]];
+            
+            for (const [dx, dy] of directions) {
+                const nx = x + dx;
+                const ny = y + dy;
+                
+                if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
+                    return true; // 图像边界
+                }
+                
+                const neighborAlpha = data[(ny * width + nx) * 4 + 3];
+                if (neighborAlpha < threshold) {
+                    return true; // 相邻透明
+                }
+            }
+            
+            return false;
+        }
+
+        // 使用 Ramer-Douglas-Peucker 算法简化轮廓
+        function simplifyContour(points, maxPoints) {
+            if (points.length <= maxPoints) return points;
+            
+            // 凸包 + 均匀采样
+            const hull = convexHull(points);
+            
+            if (hull.length <= maxPoints) {
+                return hull;
+            }
+            
+            // 均匀采样
+            const step = Math.floor(hull.length / maxPoints);
+            const simplified = [];
+            for (let i = 0; i < hull.length && simplified.length < maxPoints; i += step) {
+                simplified.push(hull[i]);
+            }
+            
+            return simplified;
+        }
+
+        // 计算凸包（Graham扫描算法）
+        function convexHull(points) {
+            if (points.length < 3) return points;
+            
+            // 找到最下方的点
+            let start = 0;
+            for (let i = 1; i < points.length; i++) {
+                if (points[i].y > points[start].y || 
+                    (points[i].y === points[start].y && points[i].x < points[start].x)) {
+                    start = i;
+                }
+            }
+            
+            const startPoint = points[start];
+            
+            // 按极角排序
+            const sorted = points.slice().sort((a, b) => {
+                const angleA = Math.atan2(a.y - startPoint.y, a.x - startPoint.x);
+                const angleB = Math.atan2(b.y - startPoint.y, b.x - startPoint.x);
+                return angleA - angleB;
+            });
+            
+            // Graham扫描
+            const hull = [];
+            for (const p of sorted) {
+                while (hull.length >= 2 && cross(hull[hull.length-2], hull[hull.length-1], p) <= 0) {
+                    hull.pop();
+                }
+                hull.push(p);
+            }
+            
+            return hull;
+        }
+
+        // 叉积
+        function cross(o, a, b) {
+            return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+        }
+
+        // 绘制预览
+        function drawPreview(width, height) {
+            ctx.clearRect(0, 0, width, height);
+            
+            // 绘制背景网格
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < width; x += 50) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < height; y += 50) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
+            
+            // 绘制每个polygon
+            const colors = [
+                '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+                '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9',
+                '#F8B500', '#00CED1', '#FF69B4', '#32CD32', '#FFD700'
+            ];
+            
+            polygonResults.forEach((result, index) => {
+                const points = result.polygon.points;
+                if (points.length < 3) return;
+                
+                ctx.beginPath();
+                ctx.moveTo(
+                    parseFloat(points[0].x) / 100 * width,
+                    parseFloat(points[0].y) / 100 * height
+                );
+                
+                for (let i = 1; i < points.length; i++) {
+                    ctx.lineTo(
+                        parseFloat(points[i].x) / 100 * width,
+                        parseFloat(points[i].y) / 100 * height
+                    );
+                }
+                
+                ctx.closePath();
+                ctx.fillStyle = colors[index % colors.length] + '40';
+                ctx.fill();
+                ctx.strokeStyle = colors[index % colors.length];
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // 绘制顶点
+                points.forEach(p => {
+                    ctx.beginPath();
+                    ctx.arc(
+                        parseFloat(p.x) / 100 * width,
+                        parseFloat(p.y) / 100 * height,
+                        3, 0, Math.PI * 2
+                    );
+                    ctx.fillStyle = colors[index % colors.length];
+                    ctx.fill();
+                });
+            });
+        }
+
+        // 显示输出
+        function displayOutput() {
+            let output = '';
+            
+            polygonResults.forEach((result, index) => {
+                output += `<div class="polygon-item">`;
+                output += `<span class="polygon-index">// 碎片 ${index + 1}: ${result.name}</span>\n`;
+                output += `<span class="polygon-code">"${result.polygon.polygonStr}"</span>`;
+                output += `</div>`;
+            });
+            
+            outputArea.innerHTML = output;
+        }
+
+        // 复制代码
+        copyBtn.addEventListener('click', () => {
+            const code = polygonResults.map((r, i) => 
+                `// 碎片 ${i + 1}: ${r.name}\n"${r.polygon.polygonStr}"`
+            ).join(',\n\n');
+            
+            navigator.clipboard.writeText(code).then(() => {
+                copyBtn.textContent = '✅ 已复制';
+                setTimeout(() => copyBtn.textContent = '📋 复制代码', 2000);
+            });
+        });
+
+        // 复制为数组格式
+        copyArrayBtn.addEventListener('click', () => {
+            const code = `const fragmentPaths = [\n${
+                polygonResults.map((r, i) => `    "${r.polygon.polygonStr}"`).join(',\n')
+            }\n];`;
+            
+            navigator.clipboard.writeText(code).then(() => {
+                copyArrayBtn.textContent = '✅ 已复制';
+                setTimeout(() => copyArrayBtn.textContent = '📦 复制为数组', 2000);
+            });
+        });
+    </script>
+</body>
+</html>
